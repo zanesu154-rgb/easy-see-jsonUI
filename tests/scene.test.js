@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {desktopViewport,fitScale,sceneForForm,titleForScene} from '../src/scene.js';
+test('desktop physical resolution uses GUI units and fits both axes',()=>{assert.deepEqual(desktopViewport('1920,1080',3),{width:640,height:360});assert.ok(fitScale(640,360,500,300)*640<=500);assert.ok(fitScale(640,360,500,300)*360<=300)});
+test('form routing chooses composition instead of blank shell or ambiguous matches',()=>{const form={id:'f',title:'Shop',fields:[]};const entries=[{node:{name:'shell'},links:[form]},{namespace:'server_form',node:{name:'long_form'},links:[form]}];assert.equal(sceneForForm(entries,form),entries[1])});
+test('clicking a conditional scene supplies its own title',()=>{assert.equal(titleForScene({node:{obj:{bindings:[{source_property_name:"(not ((#title_text - 'Shop') = #title_text))",target_property_name:'#visible'}]}},triggers:[{name:'Shop'}]}),'Shop')});
