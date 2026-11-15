@@ -1,3 +1,4 @@
+import {isVanilla} from './resources.js';
 import {cached} from './cache.js';
 import {parse} from './core.js';
 export function resolveProject(files,file){return cached(files,'resolved:'+file,()=>build(files,file))}
@@ -8,7 +9,7 @@ function build(files,file){
  const source=docs.get(file)||parse(new TextDecoder().decode(files.get(file)||new Uint8Array())).data;const origins=new Map();
  function expand(name,obj,namespace,scope,chain,path,originFile){
   let base={},baseOrigin;const ref=name.split('@')[1];
-  if(ref){const key=ref.includes('.')?ref:namespace+'.'+ref;const variants=index.get(key)||[],pack=p=>p.includes('/ui/')?p.slice(0,p.indexOf('/ui/')):'';const local=variants.filter(v=>pack(v.file)===pack(originFile));const target=local.length===1?local[0]:variants.length===1?variants[0]:undefined;if(chain.includes(key))issues.push({message:'循环继承：'+[...chain,key].join(' → '),severity:'error',path});else if(!target)issues.push({message:'未找到继承定义：'+key+'（可能需要导入原版资源）',severity:'warning',path});else{base=expand(target.name,target.obj,target.namespace,scope,[...chain,key],path,target.file);baseOrigin=target;}}
+  if(ref){const key=ref.includes('.')?ref:namespace+'.'+ref;const variants=index.get(key)||[],pack=p=>p.includes('/ui/')?p.slice(0,p.indexOf('/ui/')):'';const local=variants.filter(v=>pack(v.file)===pack(originFile));const custom=variants.filter(v=>!isVanilla(v.file)),vanilla=variants.filter(v=>isVanilla(v.file));const target=local.length===1?local[0]:custom.length===1?custom[0]:custom.length===0&&vanilla.length===1?vanilla[0]:undefined;if(chain.includes(key))issues.push({message:'循环继承：'+[...chain,key].join(' → '),severity:'error',path});else if(!target)issues.push({message:'未找到继承定义：'+key+'（可能需要导入原版资源）',severity:'warning',path});else{base=expand(target.name,target.obj,target.namespace,scope,[...chain,key],path,target.file);baseOrigin=target;}}
   const merged={...base,...obj};const vars={...scope};for(const [k,v] of Object.entries(merged))if(k.startsWith('$'))vars[k.replace(/\|default$/,'')]=v;
   function value(v,seen=[]){if(typeof v==='string'&&v.startsWith('$')&&Object.hasOwn(vars,v)){if(seen.includes(v)){issues.push({message:'变量循环：'+v,severity:'warning',path});return v}return value(vars[v],[...seen,v])}if(Array.isArray(v))return v.map(x=>value(x,seen));return v;}
   const result={};for(const [k,v] of Object.entries(merged))if(k!=='controls')result[k]=value(v);
