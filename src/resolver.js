@@ -1,7 +1,10 @@
+import {cached} from './cache.js';
 import {parse} from './core.js';
-export function resolveProject(files,file){
- const docs=new Map(),index=new Map(),issues=[];
+export function resolveProject(files,file){return cached(files,'resolved:'+file,()=>build(files,file))}
+function build(files,file){
+ const {docs,index,issues:baseIssues}=cached(files,'index',()=>{const docs=new Map(),index=new Map(),issues=[];
  for(const [p,b] of files){if(!/\.json$/i.test(p))continue;const d=parse(new TextDecoder().decode(b)).data;if(!d||typeof d!=='object'||!d.namespace)continue;docs.set(p,d);for(const [name,obj] of Object.entries(d))if(obj&&typeof obj==='object'&&!Array.isArray(obj)&&!name.startsWith('$')){const key=d.namespace+'.'+name.split('@')[0];if(index.has(key))issues.push({message:'重复控件定义：'+key,severity:'warning'});index.set(key,{file:p,name,obj,namespace:d.namespace});}}
+ return {docs,index,issues};});const issues=[...baseIssues];
  const source=docs.get(file)||parse(new TextDecoder().decode(files.get(file)||new Uint8Array())).data;const origins=new Map();
  function expand(name,obj,namespace,scope,chain,path,originFile){
   let base={},baseOrigin;const ref=name.split('@')[1];
