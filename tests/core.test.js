@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {parse,nodes,dimension,diagnose} from '../src/core.js';
+test('JSONC preserves strings and accepts comments and trailing commas',()=>{assert.deepEqual(parse('{/* hi */"url":"https://a", "a":[1,],}').data,{url:'https://a',a:[1]});assert.ok(parse('{"x":}').error)});
+test('tree paths address nested controls and preserve instance names',()=>{const d={namespace:'test',root:{controls:[{'child@base.label':{type:'label'}}]}};const n=nodes(d);assert.equal(n.length,2);assert.deepEqual(n[1].path,['root','controls',0,'child@base.label']);assert.equal(n[1].parent,n[0]);assert.equal(diagnose(d)[0].severity,'info')});
+test('percentage offsets and invalid dimensions',()=>{assert.equal(dimension('50% - 12px',200),88);assert.equal(dimension('100%',640),640);assert.equal(dimension('$width',100,25),25);assert.equal(diagnose({root:{size:5}})[0].severity,'error')});
