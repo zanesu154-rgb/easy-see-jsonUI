@@ -1,3 +1,4 @@
+import {presentScene,clipInsets,pointInRect} from './scene-presentation.js';
 import {PreviewFont} from './preview-font.js';
 import {paintGameText} from './text-layout.js';
 import {SourceDrafts} from './source-drafts.js';
@@ -67,15 +68,27 @@ function draw(ns) {
   let root=ns.find(n=>n.id===selection);while(root?.parent)root=root.parent;
   const scene=layoutScene(ns,root?.id,{width:w,height:h,form:activeForm,simulation,mode,measureText:previewFont.measure});
   runtimeNodes=scene.runtime;
-  const elements=new Map();
+  const elements=new Map(),states=new Map();
+  for(const [id]of scene.rects)if(runtimeNodes.get(id)?.type==='button')states.set(id,mode==='edit'?$('buttonState').value:'default');
   const updateStats=()=>{
     const hidden=[...elements.values()].filter(el=>el.closest('[hidden]')).length;
     $('controlStats').textContent=`定义控件 ${scene.total} · 已建 ${elements.size} · 显示 ${elements.size-hidden} · 已建但隐藏 ${hidden} · 未建隐藏 ${scene.pruned}`;
   };
+  const applyPresentation=(rects=scene.rects)=>{
+    const presentation=presentScene(ns,{...scene,rects},states);
+    for(const [id,el]of elements){
+      const item=presentation.get(id);if(!item)continue;
+      el.hidden=!item.visible;
+      el.dataset.layer=item.layer;
+      Object.assign(el.style,{left:item.rect.x+'px',top:item.rect.y+'px',zIndex:String(Math.round(item.layer)),opacity:item.opacity,clipPath:clipInsets(item.rect,item.clip)});
+      el.style.color=item.color?`rgb(${item.color.slice(0,3).map(c=>Math.round(c*255)).join(',')})`:'';
+    }
+    updateStats();
+  };
   for(const n of ns) {
     const o=runtimeNodes.get(n.id),r=scene.rects.get(n.id);if(!r)continue;
     const el=document.createElement('div'),font=fontMetrics(o);
-    el.dataset.node=n.id;el.dataset.file=current;el.dataset.controlName=n.name;
+    el.dataset.node=n.id;el.dataset.file=current;el.dataset.controlName=n.name;el.dataset.parent=n.parent?.id||'';
     el.className='control'+(n.id===selection?' selected':'')+(o._collectionMissing?' missing-data':'');
     Object.assign(el.style,{left:r.x+'px',top:r.y+'px',width:r.w+'px',height:r.h+'px',opacity:typeof o.alpha==='number'?o.alpha:1,zIndex:Number(o.layer)||0,fontSize:font.fontSize+'px',lineHeight:(font.lineHeight+(Number(o.line_padding)||0))+'px'});
     if(o.clips_children===true)el.style.overflow='hidden';
@@ -93,20 +106,32 @@ function draw(ns) {
       else{el.title=textureResource(files,current,o.texture).message||'贴图缺失';el.style.background='repeating-conic-gradient(#a34e9a 0% 25%,#25202b 0% 50%) 0/16px 16px';}
     }
     elements.set(n.id,el);
-    el.onpointerdown=e=>startDrag(e,n,el);
+    el.style.pointerEvents=mode==='preview'?(o.type==='button'&&o.enabled!==false&&r.w>0&&r.h>0?'auto':'none'):'auto';
+    el.onpointerdown=e=>startDrag(e,n,el,(dx,dy)=>{
+      const rects=new Map(scene.rects);
+      for(const child of ns)if(n.path.every((value,i)=>child.path[i]===value)){
+        const original=scene.rects.get(child.id);if(original)rects.set(child.id,{...original,x:original.x+dx,y:original.y+dy});
+      }
+      applyPresentation(rects);
+    });
     el.onclick=e=>{
       e.stopPropagation();if(el.dataset.dragged){delete el.dataset.dragged;return;}
-      if(mode==='preview'){activateControl(n,ns);return;}
+      if(mode==='preview'){if(o.type==='button'&&o.enabled!==false&&r.w>0&&r.h>0&&(e.detail===0||pointInRect(el.getBoundingClientRect(),e.clientX,e.clientY)))activateControl(n,ns);return;}
       let top=n;while(top.parent)top=top.parent;
       const key=current+'::'+top.id;
       if(!expanded.has(key)){expanded.add(key);selection=n.id;render();}else selectNode(n);
       document.querySelector('.tree-item.active:not(.file)')?.scrollIntoView({block:'nearest'});
     };
-    const parent=n.parent&&elements.get(n.parent.id),p=n.parent&&scene.rects.get(n.parent.id);
-    if(parent){el.style.left=(r.x-p.x)+'px';el.style.top=(r.y-p.y)+'px';parent.append(el);}else canvas.append(el);
+    canvas.append(el);
   }
-  for(const [id,el]of elements){const o=runtimeNodes.get(id);if(o.type==='button')installButtonStates(el,o,{mode,forcedState:$('buttonState').value,onChange:updateStats});}
-  updateStats();
+  for(const [id,el]of elements){
+    const o=runtimeNodes.get(id);
+    if(o.type==='button')installButtonStates(el,o,{mode,forcedState:$('buttonState').value,onChange:state=>{
+      if(!el.isConnected||states.get(id)===state)return;
+      states.set(id,state);applyPresentation();
+    }});
+  }
+  applyPresentation();
   const missing=[...runtimeNodes.values()].filter(o=>o._collectionMissing).length;
   if(missing)$('collectionStats').textContent+=' · '+missing+' 个集合控件缺少对应数据'+(mode==='edit'?'（虚线显示）':'（预览隐藏）');
   if($('zoom').value==='focus') {
@@ -126,7 +151,25 @@ function showForm(form,preserve=false){activeForm=form;const project=screens(fil
 function inspectScript(form,field){$('properties').replaceChildren();const h=document.createElement('h3');h.textContent=stripFormatting(field?field.text:form.title);const note=document.createElement('small');note.textContent='脚本：'+form.file+':'+form.line+'。'+(form.items.length?'候选触发物品：'+form.items.join('、'):'未识别到确定的物品触发入口。')+' 标准脚本表单字段暂只读；动态逻辑不执行。';$('properties').append(h,note);}
 function followButton(form,index){const jump=form.jumps.find(j=>j.index===index),target=jump&&screens(files).forms.find(f=>f.id===jump.target);if(target)showForm(target);else toast('该按钮的跳转无法静态确定，未执行游戏脚本。');}
 function activateControl(n,ns){let b=n;while(b&&b.obj.type!=='button')b=b.parent;if(!b)return;const index=runtimeNodes.get(b.id)?._collectionIndex;const buttonId=b.obj.button_mappings?.find(m=>m.from_button_id==='button.menu_select')?.to_button_id||'button.form_button_click';$('clickResult').textContent='点击：'+buttonId+' · 序号：'+(index??'未绑定集合');if(index===undefined){toast('该按钮没有可确定的集合序号。');return}if(activeForm)followButton(activeForm,index);else toast('已记录按钮序号；当前没有关联脚本跳转。');}
-function startDrag(e,n,el){if(n.obj._generated||isVanilla(current)||mode!=='edit'||e.button!==0||!at(data().data,n.path))return;e.stopPropagation();const x=e.clientX,y=e.clientY,zoom=Number($('canvas').dataset.scale)||1,left=parseFloat(el.style.left),top=parseFloat(el.style.top),old=n.obj.offset||[0,0];let dx=0,dy=0;el.setPointerCapture(e.pointerId);el.onpointermove=event=>{dx=(event.clientX-x)/zoom;dy=(event.clientY-y)/zoom;if(Math.abs(dx)+Math.abs(dy)>3){el.dataset.dragged='true';el.style.left=left+dx+'px';el.style.top=top+dy+'px'}};el.onpointerup=()=>{el.onpointermove=null;el.onpointerup=null;if(Math.abs(dx)+Math.abs(dy)<=3)return;if(old.some(v=>typeof v!=='number')){toast('百分比或表达式偏移请在属性面板修改');render();return}record();const d=data().data;at(d,n.path).offset=[Math.round((old[0]||0)+dx),Math.round((old[1]||0)+dy)];save(d);selection=n.id;render()};}
+function startDrag(e,n,el,previewMove){
+  if(n.obj._generated||isVanilla(current)||mode!=='edit'||e.button!==0||!at(data().data,n.path))return;
+  e.stopPropagation();
+  const x=e.clientX,y=e.clientY,zoom=Number($('canvas').dataset.scale)||1,old=n.obj.offset||[0,0];
+  let dx=0,dy=0,dragging=false;
+  const clear=()=>{el.onpointermove=null;el.onpointerup=null;el.onpointercancel=null;};
+  el.setPointerCapture(e.pointerId);
+  el.onpointermove=event=>{
+    dx=(event.clientX-x)/zoom;dy=(event.clientY-y)/zoom;
+    if(dragging||Math.abs(dx)+Math.abs(dy)>3){dragging=true;el.dataset.dragged='true';previewMove(dx,dy);}
+  };
+  el.onpointercancel=()=>{clear();if(dragging&&el.isConnected)render();};
+  el.onpointerup=()=>{
+    clear();if(!el.isConnected||!dragging)return;
+    if(Math.abs(dx)+Math.abs(dy)<=3){render();return;}
+    if(!Array.isArray(old)||old.some(value=>typeof value!=='number')){toast('百分比、变量或动画偏移请在属性或源码中修改');render();return;}
+    record();const d=data().data;at(d,n.path).offset=[Math.round((old[0]||0)+dx),Math.round((old[1]||0)+dy)];save(d);selection=n.id;render();
+  };
+}
 function selectNode(n){selection=n.id;document.querySelectorAll('[data-node]').forEach(el=>{const active=el.dataset.node===selection&&el.dataset.file===current;el.classList.toggle(el.classList.contains('control')?'selected':'active',active)});$('properties').replaceChildren();properties(n);}
 
 $('buttonState').onchange=refreshScene;

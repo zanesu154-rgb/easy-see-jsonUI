@@ -13,35 +13,30 @@ export function buttonControlVisible(button, childName, state = 'default') {
   return child === active;
 }
 
-// Switch existing branches without rebuilding the scene or changing project JSON.
+// The renderer owns branch visibility; this controller only observes the button's own box.
 export function installButtonStates(el, button, {mode, forcedState = 'default', onChange = () => {}}) {
-  let hovered = false, pressed = false;
-  el.dataset.button = 'true';
-  const update = () => {
-    const state = mode === 'edit' ? forcedState : pressed ? 'pressed' : hovered ? 'hover' : 'default';
-    el.dataset.buttonState = state;
-    for (const child of el.children) {
-      if (child.classList.contains('control')) child.hidden = !buttonControlVisible(button, child.dataset.controlName, state);
-    }
-    onChange();
+  let hovered=false,pressed=false,pointerId=null;
+  el.dataset.button='true';
+  const inside=event=>{
+    const r=el.getBoundingClientRect();
+    return r.width>0&&r.height>0&&event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;
   };
-  update();
-  if (mode !== 'preview') return;
-  el.addEventListener('pointerenter', () => { hovered = true; update(); });
-  el.addEventListener('pointerleave', () => { hovered = false; pressed = false; update(); });
-  el.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('[data-button]') !== el) return;
-    pressed = true;
-    el.setPointerCapture(event.pointerId);
-    update();
-  }, true);
-  el.addEventListener('pointerup', event => {
-    if (!pressed) return;
-    const rect = el.getBoundingClientRect();
-    hovered = event.clientX >= rect.left && event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom;
-    pressed = false;
-    update();
+  const update=()=>{
+    const state=mode==='edit'?forcedState:pressed&&hovered?'pressed':hovered?'hover':'default';
+    el.dataset.buttonState=state;onChange(state);
+  };
+  update();if(mode!=='preview'||button.enabled===false)return;
+  el.addEventListener('pointerenter',event=>{hovered=inside(event);update();});
+  el.addEventListener('pointermove',event=>{if(pointerId!==null&&event.pointerId!==pointerId)return;hovered=inside(event);update();});
+  el.addEventListener('pointerleave',()=>{hovered=false;update();});
+  el.addEventListener('pointerdown',event=>{
+    if(event.button!==0||!inside(event))return;
+    pressed=true;hovered=true;pointerId=event.pointerId;el.setPointerCapture(event.pointerId);update();
   });
-  el.addEventListener('pointercancel', () => { hovered = false; pressed = false; update(); });
-  el.addEventListener('lostpointercapture', () => { pressed = false; update(); });
+  el.addEventListener('pointerup',event=>{
+    if(pointerId!==event.pointerId)return;
+    hovered=inside(event);pressed=false;pointerId=null;update();
+  });
+  el.addEventListener('pointercancel',()=>{hovered=false;pressed=false;pointerId=null;update();});
+  el.addEventListener('lostpointercapture',()=>{pressed=false;pointerId=null;update();});
 }
