@@ -11,6 +11,7 @@
     "test:interaction": "node scripts/interaction-regression.mjs",
     "test:editing": "node scripts/editing-regression.mjs",
     "test:navigation": "node scripts/navigation-regression.mjs",
-    "test:browsing": "node scripts/browsing-regression.mjs"
+    "test:browsing": "node scripts/browsing-regression.mjs",
+    "test:simulation": "node scripts/simulation-regression.mjs"
   }
 }

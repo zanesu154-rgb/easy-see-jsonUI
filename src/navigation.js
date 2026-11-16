@@ -1,3 +1,4 @@
+import {containerRoutes} from './container-routes.js';
 import {vanillaRootIndex} from './vanilla-root-index.js';
 import {nodes,parse} from './core.js';
 import {runtimeObject} from './bindings.js';
@@ -17,7 +18,7 @@ export function interfaceCategory(screen){
   if(screen.namespace==='hud'||screen.insertions?.some(i=>/hud/.test(i.root)))return 'HUD';
   if(screen.namespace==='server_form')return '表单（server_form）';
   if(/chat/.test(name))return '聊天';
-  if(/chest|container|inventory/.test(name))return '容器与物品栏';
+  if(/chest|container|inventory/.test(name))return '容器';
   return screen.namespace||'其他界面';
 }
 
@@ -27,12 +28,13 @@ function evaluated(node,title){
   for(const n of chain){last=runtimeObject(n.obj,null,{formTitle:title},context);context=last._context;visible=visible&&last.visible!==false&&last.ignored!==true;}
   return {visible,last};
 }
-export const routeMatches=(route,title)=>{if(title===undefined)return false;const result=evaluated(route.node,title);return result.visible&&result.last.visible===true;};
+export const routeMatches=(route,title)=>{if(route.kind==='container')return title===route.sample;if(title===undefined)return false;const result=evaluated(route.node,title);return result.visible&&result.last.visible===true;};
 
 const models=new WeakMap();
 export function navigationModel(files,project){
   if(models.has(project))return models.get(project);
-  const screens=[...(project.custom||[]),...project.entries],definitions=[...screens,...project.templates,...(project.unchanged||[])],groups=new Map(),routes=[];
+  const containers=containerRoutes(files),screens=[...(project.custom||[]),...project.entries];for(const {screen}of containers)if(!screens.some(s=>s.id===screen.id))screens.push(screen);
+  const definitions=[...screens,...project.templates,...(project.unchanged||[])],groups=new Map(),routes=[];
   for(const screen of screens){
     const category=interfaceCategory(screen);if(!groups.has(category))groups.set(category,[]);groups.get(category).push(screen);
     if(screen.namespace!=='server_form')continue;
@@ -68,21 +70,22 @@ export function navigationModel(files,project){
       routes.push(route);
     }
   }
+  for(const container of containers)for(const branch of container.branches){branch.definition=definitions.find(d=>d.namespace+'.'+d.node.name.split('@')[0]===branch.content);routes.push(branch);}
   groups.clear();
   const visibleScreens=screens.filter(screen=>!routes.some(route=>route.definition?.id===screen.id&&route.screen.id!==screen.id));
   for(const screen of visibleScreens){
     const category=routes.some(route=>route.definition?.id===screen.id)?'表单（server_form）':interfaceCategory(screen);
     if(!groups.has(category))groups.set(category,[]);groups.get(category).push(screen);
   }
-  const priority=category=>{const index=['HUD','表单（server_form）','容器与物品栏','聊天'].indexOf(category);return index<0?99:index;};
+  const priority=category=>{const index=['HUD','表单（server_form）','容器','聊天'].indexOf(category);return index<0?99:index;};
   const ordered=new Map([...groups].sort(([a],[b])=>priority(a)-priority(b)||a.localeCompare(b)));
   const result={groups:ordered,routes,screens:visibleScreens};models.set(project,result);return result;
 }
 
-export function routeForTitle(model,title){return model.routes.find(r=>r.kind!=='fallback'&&routeMatches(r,title))||model.routes.find(r=>routeMatches(r,title));}
+export function routeForTitle(model,title){return model.routes.find(r=>r.kind!=='container'&&r.kind!=='fallback'&&routeMatches(r,title))||model.routes.find(r=>r.kind!=='container'&&routeMatches(r,title));}
 export function routeForSelection(model,file,node){
   if(!node)return;
-  return model.routes.filter(r=>r.screen.file===file&&nodeContains(r.node,node)).sort((a,b)=>b.node.path.length-a.node.path.length)[0];
+  return model.routes.filter(r=>r.kind!=='container'&&r.screen.file===file&&nodeContains(r.node,node)).sort((a,b)=>b.node.path.length-a.node.path.length)[0];
 }
 
 // Source indexes deliberately do not expand inheritance. Resolving every vanilla

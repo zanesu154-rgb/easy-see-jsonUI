@@ -53,8 +53,8 @@ try{
  assert.ok(!roots.some(row=>/tooltip_mid_/.test(row.text)));
  for(const name of ['questbook_screen','starmap_screen','martialbook_screen'])assert.ok(!roots.some(row=>row.text.endsWith(' · '+name)),name);
  assert.ok(await evaluate("[...document.querySelectorAll('.screen-card strong')].some(el=>el.textContent==='chat · messages_text/text')"));
- await waitLong("document.querySelectorAll('.screen-card[data-route][data-count]').length===4");
- const cards=await evaluate("[...document.querySelectorAll('.screen-card[data-route]')].map(el=>({title:el.querySelector('strong').textContent,count:Number(el.dataset.count)}))");
+ await waitLong("[...document.querySelectorAll('.screen-card[data-route][data-count]')].filter(el=>!el.dataset.route.includes('::container:')).length===4");
+ const cards=await evaluate("[...document.querySelectorAll('.screen-card[data-route]')].filter(el=>!el.dataset.route.includes('::container:')).map(el=>({title:el.querySelector('strong').textContent,count:Number(el.dataset.count)}))");
  assert.equal(cards.length,4);assert.ok(new Set(cards.map(card=>card.count)).size>1);
  const scroll=await evaluate("(()=>{const sidebar=document.querySelector('aside.browser');sidebar.scrollTop=sidebar.scrollHeight;const search=document.getElementById('search').getBoundingClientRect(),panel=sidebar.getBoundingClientRect();return {searchTop:search.top,searchBottom:search.bottom,top:panel.top,bottom:panel.bottom,scrolled:sidebar.scrollTop};})()");
  assert.ok(scroll.scrolled>100);assert.ok(scroll.searchTop>=scroll.top);assert.ok(scroll.searchBottom<=scroll.bottom);

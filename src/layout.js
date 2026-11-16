@@ -51,7 +51,8 @@ export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode 
       const fixed=new Map(kids.filter(c=>!flex.includes(c)).map(c=>[c.id,measure(c,w,h,previous)]));
       const occupied=[...fixed.values()].reduce((sum,s)=>sum+(axis?s.h:s.w),0),remaining=Math.max(0,(axis?h:w)-occupied)/Math.max(1,flex.length);
       extents=kids.map(c=>fixed.get(c.id)||measure(c,w,h,previous,{axis,value:remaining}));
-    }else extents=kids.map(c=>measure(c,w,h,previous));
+    }else if(o.type==='grid'&&Array.isArray(o.grid_dimensions))extents=kids.map(c=>measure(c,w/Math.max(1,o.grid_dimensions[0]),h/Math.max(1,o.grid_dimensions[1]),previous));
+    else extents=kids.map(c=>measure(c,w,h,previous));
     for(let axis=0;axis<2;axis++){
       const match=content[axis];if(!match)continue;
       const spans=extents.map(size=>axis?size.h:size.w);
@@ -84,7 +85,9 @@ export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode 
     let used=0;
     for(const child of children.get(n.id)||[]){
       if(runtime.get(child.id)._layoutHidden)continue;
-      place(child,r,o.type==='stack_panel'?{horizontal:o.orientation==='horizontal',used}:null);
+      const grid=o.type==='grid'&&Array.isArray(o.grid_dimensions)?o.grid_dimensions:null,pos=runtime.get(child.id)?.grid_position;
+      const parent=grid&&Array.isArray(pos)?{x:r.x+pos[0]*w/grid[0],y:r.y+pos[1]*h/grid[1],w:w/grid[0],h:h/grid[1]}:r;
+      place(child,parent,o.type==='stack_panel'?{horizontal:o.orientation==='horizontal',used}:null);
       const cr=rects.get(child.id);if(cr)used+=o.orientation==='horizontal'?cr.w:cr.h;
     }
   }

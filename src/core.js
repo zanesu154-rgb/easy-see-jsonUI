@@ -20,7 +20,7 @@ export function diagnose(data,paths=[],options={}){
     const add=(message,severity='warning',path=n.path)=>issues.push({message,severity,path});
     if(n.name.includes('@'))add('继承引用尚未展开，预览仅显示当前覆盖值。','info');
     if(o.bindings&&!options.runtime)add('动态绑定需要游戏数据，当前显示静态值。','info');
-    if(o.type&&!['panel','label','image','button','screen','stack_panel','collection_panel'].includes(o.type))add(`尚未支持预览控件类型 ${o.type}。`,'info');
+    if(o.type&&!['panel','label','image','button','screen','stack_panel','collection_panel','grid'].includes(o.type))add(`尚未支持预览控件类型 ${o.type}。`,'info');
     for(const key of ['size','offset'])if(o[key]!==undefined&&!(typeof o[key]==='string'&&(o[key].startsWith('$')||key==='offset'&&o[key].startsWith('@')))&&(!Array.isArray(o[key])||o[key].length!==2))add(`${key} 应为包含两个值的数组。`,'error');
     if(typeof o.offset==='string'&&o.offset.startsWith('@'))add('动画偏移暂按静态位置预览：'+o.offset,'info');
     if(o.controls!==undefined&&!Array.isArray(o.controls)){if(typeof o.controls==='string'&&o.controls.startsWith('$'))add('未解析控件数组变量：'+o.controls,'info');else add('controls 必须为数组。','error');}

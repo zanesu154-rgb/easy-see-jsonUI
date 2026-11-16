@@ -1,3 +1,4 @@
+import {simulationVariables} from './conditional-variables.js';
 import {collectionScope} from './collections.js';
 import {expression} from './expression.js';
 
@@ -8,6 +9,7 @@ export function runtimeObject(obj, form, simulation = {}, parentContext = {}) {
   const body = simulation.formBody ?? form?.fields.find(f => f.kind === 'body')?.text ?? '';
   const scope = collectionScope(obj, parentContext, simulation, form);
   const context = {
+    ...simulationVariables(simulation),
     '$touch': simulation.touch ?? false,
     ...scope.context,
     '#title_text': title, '#text': title, '#name': title,
@@ -59,6 +61,7 @@ export function runtimeObject(obj, form, simulation = {}, parentContext = {}) {
   if (typeof result.texture === 'string' && Object.hasOwn(context, result.texture)) result.texture = context[result.texture];
   return {
     ...result, visible: scope.missing ? false : result.visible,
+    _containerIndex:scope.containerIndex,_containerItem:scope.item,_containerTexture:scope.item?.texture,
     _collectionIndex: scope.index, _collectionMissing: scope.missing || false,
     _trace: trace, _context: context
   };
