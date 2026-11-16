@@ -75,7 +75,7 @@ try {
  assert.equal(await evaluate("document.querySelectorAll('#canvas .control').length"),135);
  await clickTree('long_form');
  const qb=await evaluate("({collectionStats:document.getElementById('collectionStats').textContent,stats:document.getElementById('controlStats').textContent,issues:document.getElementById('issues').textContent,nodes:document.querySelectorAll('#canvas .control').length,visibleTips:[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName.startsWith('tip@')&&!el.closest('[hidden]')).length})");
- assert.match(qb.collectionStats,/按钮数据 34 项 · 当前集合按钮 [1-9][0-9]* 个/);
+ assert.match(qb.collectionStats,/按钮数据 34 项 · 当前集合按钮 34 个（显示 15 · 隐藏 19）/);
  assert.equal(qb.visibleTips,0);assert.ok(qb.nodes<400);assert.ok(!qb.issues.includes('动态绑定需要游戏数据'));assert.ok(!qb.issues.includes('collection_panel'));assert.ok(!qb.issues.includes('offset 应为'));
  const sourceBefore=await evaluate("document.getElementById('source').value");
  const itemSource=await evaluate("(()=>{const e=[...document.querySelectorAll('#canvas .control')].find(e=>e.dataset.controlName==='icon'&&e.style.backgroundImage);e.click();return document.getElementById('properties').textContent})()");
@@ -90,7 +90,7 @@ try {
  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:20,y:100});
  assert.equal(await evaluate("document.getElementById('source').value"),sourceBefore);
  // Simulation JSON remains outside the project's exported files.
- await evaluate("window.__exports=[];HTMLAnchorElement.prototype.click=function(){window.__exports.push(this.href)};document.getElementById('export').click()");
+ await evaluate("window.__exports=[];HTMLAnchorElement.prototype.click=function(){window.__exports.push(this.href)};document.getElementById('export').click();document.getElementById('confirmExport').click()");
  await waitFor('window.__exports.length===1');
  const exported=await evaluate("(async()=>{const b=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',window.__exports[0]);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});const z=await JSZip.loadAsync(b);const original=await JSZip.loadAsync(window.__originalAddon);const mismatched=[];for(const e of Object.values(original.files)){if(e.dir)continue;const a=await e.async('uint8array'),b=await z.file(e.name).async('uint8array');if(a.length!==b.length||a.some((v,i)=>v!==b[i]))mismatched.push(e.name)}const dependency=new Uint8Array(await window.__originalDependency.arrayBuffer()),saved=await z.file('MS_RP/ui/server_form.json').async('uint8array');if(dependency.length!==saved.length||dependency.some((v,i)=>v!==saved[i]))mismatched.push('server_form.json');if(window.__originalTextures){const textures=await JSZip.loadAsync(window.__originalTextures);for(const entry of Object.values(textures.files)){if(entry.dir)continue;const path='MS_RP/textures/ui/'+entry.name,a=await entry.async('uint8array'),saved=z.file(path);if(!saved){mismatched.push(path);continue}const b=await saved.async('uint8array');if(a.length!==b.length||a.some((v,i)=>v!==b[i]))mismatched.push(path)}}return {count:Object.values(z.files).filter(e=>!e.dir).length,hasSim:Object.keys(z.files).some(p=>p.includes('reference-simulation')),hasDependency:Boolean(z.file('MS_RP/ui/server_form.json')),mismatched}})()");
  assert.equal(exported.hasSim,false);assert.equal(exported.hasDependency,true);assert.equal(exported.count,985+addedTextures);assert.deepEqual(exported.mismatched,[]);
@@ -114,7 +114,7 @@ try {
  assert.equal(await evaluate("document.getElementById('source').value"),draft);
  await clickTree('hud · ms_status_panel');await clickTree('long_form');
  assert.equal(await evaluate("document.getElementById('source').value"),draft);
- await evaluate("window.__exports=[];document.getElementById('export').click()");await waitFor('window.__exports.length===1');
+ await evaluate("window.__exports=[];document.getElementById('export').click();document.getElementById('confirmExport').click()");await waitFor('window.__exports.length===1');
  const exportedBase=await evaluate("(async()=>{const b=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',window.__exports[0]);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});return (await JSZip.loadAsync(b)).file('MS_RP/ui/server_form.json').async('string')})()");
  assert.equal(exportedBase,baseSource);
  await evaluate("document.getElementById('apply').click()");assert.equal(await evaluate("document.getElementById('sourceStatus').textContent"),'');

@@ -8,6 +8,7 @@
     "start": "node server.mjs",
     "test:reference": "node scripts/reference-regression.mjs",
     "test:text": "node scripts/text-regression.mjs",
-    "test:interaction": "node scripts/interaction-regression.mjs"
+    "test:interaction": "node scripts/interaction-regression.mjs",
+    "test:editing": "node scripts/editing-regression.mjs"
   }
 }

@@ -10,5 +10,6 @@ export class SourceDrafts {
     return {text:draft?.text??base,dirty:Boolean(draft),conflict:Boolean(draft&&draft.base!==base)};
   }
   remove(file){this.#entries.delete(file);}
+  pending(files){return [...this.#entries.keys()].filter(file=>files.has(file));}
   clear(){this.#entries.clear();}
 }
