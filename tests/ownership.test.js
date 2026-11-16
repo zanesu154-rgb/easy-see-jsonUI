@@ -5,3 +5,8 @@ test('unrelated duplicate definitions do not pollute current screen warnings',()
 test('form body alias renders as content and unknown binding is diagnosed rather than printed',()=>{assert.equal(runtimeObject({text:'#form_text'},null,{formBody:'任务说明'}).text,'任务说明');const missing=runtimeObject({text:'#unknown'});assert.equal(missing.text,'');assert.ok(missing._trace.some(t=>t.error))});
 test('scene selection preserves full matching title data',()=>{const screen={node:{obj:{bindings:[{source_property_name:"(not ((#title_text - 'PAGE:') = #title_text))",target_property_name:'#visible'}]}},triggers:[{name:'PAGE:'}]};assert.equal(titleForScene(screen,{formTitle:'PAGE:chapter|title'}),'PAGE:chapter|title')});
 test('identical cross-pack definitions remain resolvable without conflict warnings',()=>{const files=new Map([['P/ui/main.json',bytes({namespace:'demo','main@shared.panel':{}})],['A/ui/a.json',bytes({namespace:'shared',panel:{type:'panel',size:[40,20]}})],['B/ui/a.json',bytes({namespace:'shared',panel:{type:'panel',size:[40,20]}})]]);const r=resolveProject(files,'P/ui/main.json');assert.deepEqual(r.data['main@shared.panel'].size,[40,20]);assert.equal(r.issues.length,0)});
+
+test('HUD modification insertions are discoverable as custom controls with their location',()=>{
+ const files=new Map([['RP/ui/hud_screen.json',bytes({namespace:'hud',status:{type:'panel',controls:[]},root_panel:{modifications:[{array_name:'controls',operation:'insert_front',value:[{'status@hud.status':{}}]}]}})]]);
+ const project=screens(files);assert.equal(project.custom.length,1);assert.equal(project.custom[0].node.name,'status');assert.equal(project.custom[0].insertions[0].root,'root_panel');assert.ok(!project.templates.some(x=>x.node.name==='status'));
+});
