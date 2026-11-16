@@ -16,6 +16,7 @@ function span(tree){
   }
  }
 }
+export {span as expressionSpan};
 export function expressionSources(obj){
  const result=[];
  const expand=(tree,aliases)=>{if(!tree)return tree;if(tree.type==='ref'&&aliases.has(tree.value))return aliases.get(tree.value);if(tree.type==='binary')return {...tree,left:expand(tree.left,aliases),right:expand(tree.right,aliases)};if(tree.type==='unary')return {...tree,value:expand(tree.value,aliases)};return tree;};
@@ -27,7 +28,7 @@ export function expressionSources(obj){
    if(binding.binding_name_override&&binding.binding_name)aliases.set(binding.binding_name_override,aliases.get(binding.binding_name)||{type:'ref',value:binding.binding_name});
    if(typeof binding.source_property_name==='string'){
     const tree=expand(expressionTree(binding.source_property_name).tree,aliases);
-    result.push({source:binding.source_property_name,path:[...path,'bindings'],tree});
+    result.push({source:binding.source_property_name,path:[...path,'bindings'],tree,target:binding.target_property_name});
     if(tree&&binding.target_property_name)aliases.set(binding.target_property_name,tree);
    }
   }
@@ -40,9 +41,9 @@ export function expressionSources(obj){
  walk(obj);return result;
 }
 function plusParts(tree){return tree?.type==='binary'&&tree.op==='+'?[...plusParts(tree.left),...plusParts(tree.right)]:[tree];}
-export function texturePatterns(obj,files){
+export function texturePatterns(obj,files,{sources}={}){
  const found=new Map();
- for(const {source,tree}of expressionSources(obj)){
+ for(const {source,tree}of sources||expressionSources(obj)){
   if(!tree)continue;
   const parts=plusParts(tree),windows=parts.map(span).filter(Boolean),literals=parts.filter(p=>p?.type==='literal').map(p=>p.value);
   if(windows.length!==1||parts.some(p=>!span(p)&&p?.type!=='literal'))continue;
@@ -84,7 +85,7 @@ export function inferChannels(obj,files=new Map()){
   const sorted=[...new Set(cuts)].sort((a,b)=>a-b),fields=[];
   for(let i=0;i<sorted.length;i++){
    const a=sorted[i],b=sorted[i+1]??Infinity,run=ranges.find(r=>r.start===a&&r.end===b),known=info.ranges.filter(r=>r.start===a&&r.end===b),pattern=patterns.find(p=>p.channel===info.channel&&p.start===a&&p.end===b);
-   fields.push({start:a,end:b,kind:run?.kind||(!Number.isFinite(b)?'text':known.some(r=>r.padding)?'path':pattern?.values.length?'enum':'fixed'),padding:known.find(r=>r.padding)?.padding,allowed:run?.key,options:pattern?.values||[]});
+   fields.push({start:a,end:b,kind:run?.kind||(!Number.isFinite(b)?'text':known.some(r=>r.padding)?'path':pattern?.values.length?'enum':'fixed'),padding:known.find(r=>r.padding)?.padding,allowed:run?.key||(b-a===1?[...(info.characters.get(a)||[])].sort().join(''):undefined),options:pattern?.values||[]});
   }
   result.push({id:info.channel+'|'+prefix,channel:info.channel,prefix,fields});
  }
@@ -93,12 +94,13 @@ export function inferChannels(obj,files=new Map()){
 export function channelValue(sim,channel,index){
  const keys={'#hud_title_text_string':'title','#hud_subtitle_text_string':'subtitle','#hud_actionbar_text_string':'actionbar','#title_text':'formTitle'};
  if(channel==='#form_button_text'&&Number.isInteger(index)&&sim.formButtons?.[index]!==undefined)return typeof sim.formButtons[index]==='string'?sim.formButtons[index]:sim.formButtons[index].text;
- return keys[channel]?sim[keys[channel]]||'':sim.bindings?.[channel]||'';
+ if(Object.hasOwn(sim.bindings||{},channel))return String(sim.bindings[channel]??'');
+ return String(keys[channel]?sim[keys[channel]]??'':sim.bindings?.[channel]??'');
 }
 export function setChannel(sim,channel,value,index){
  const result=structuredClone(sim),keys={'#hud_title_text_string':'title','#hud_subtitle_text_string':'subtitle','#hud_actionbar_text_string':'actionbar','#title_text':'formTitle'};
  if(channel==='#form_button_text'&&Number.isInteger(index)&&result.formButtons?.[index]!==undefined){const item=result.formButtons[index];result.formButtons[index]=typeof item==='string'?value:{...item,text:value};}
- else if(keys[channel])result[keys[channel]]=value;else result.bindings={...result.bindings,[channel]:value};return result;
+ else if(keys[channel]){result[keys[channel]]=value;if(Object.hasOwn(result.bindings||{},channel))result.bindings[channel]=value;}else result.bindings={...result.bindings,[channel]:value};return result;
 }
 export function fieldValues(schema,value=''){
  const valid=value.startsWith(schema.prefix);return schema.fields.map(field=>{

@@ -1,3 +1,6 @@
+import {sampleCatalog} from './state-samples.js';
+import {StateSampleControls} from './state-sample-controls.js';
+import {cached} from './cache.js';
 import {previewReadiness} from './preview-readiness.js';
 import {Playback} from './playback.js';
 import {Comparison} from './comparison.js';
@@ -46,6 +49,8 @@ const presets=new Presets();
 let sceneInfo=null,currentInstances=null,currentResolved=null,previewSceneKey='';
 let sceneNodes=[],navigationOrigin=null,lastPick=null,homeVisible=false,homeModel=null;
 const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='edit',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
+let applyingSample=false;
+const stateSamples=new StateSampleControls($('stateSamples'),{onApply:(value,options)=>{applyingSample=true;try{applySimulation(value);if(options.restoreDraft!==undefined)$('simulation').value=options.restoreDraft;}finally{applyingSample=false;}},onError:toast,getDraft:()=>$('simulation').value});
 const comparison=new Comparison($('comparison'));
 const playback=new Playback((time,enabled)=>comparison.frame(time,enabled),()=>renderStageFour());
 
@@ -206,7 +211,7 @@ if(importedSettings!==null)new EditSession().loadSettings(importedSettings);
 const presetEntries=[...incoming].filter(([path])=>isEditorFile(path)&&path.endsWith('/presets.json'));if(presetEntries.length>1)throw Error('包中包含多份预设文件');
 const importedPresets=presetEntries.length?text(presetEntries[0][1]):null;if(importedPresets!==null)new Presets().load(importedPresets);
 for(const [path]of incoming)if(isEditorFile(path))incoming.delete(path);
-const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){previewSceneKey='';presets.clear();homeVisible=true;homeModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
+const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){stateSamples.clear();previewSceneKey='';presets.clear();homeVisible=true;homeModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
 $('import').onclick=()=>{appendImport=false;$('files').click()};$('dependency').onclick=()=>{appendImport=true;$('files').click()};$('files').onchange=e=>load([...e.target.files]);document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();load([...e.dataTransfer.files])});$('search').oninput=renderSearch;$('resolution').onchange=refreshScene;$('guiScale').onchange=refreshScene;$('zoom').onchange=refreshScene;$('undo').onclick=()=>{if(history.length){future.push(snapshot());restore(history.pop())}};$('redo').onclick=()=>{if(future.length){history.push(snapshot());restore(future.pop())}};$('apply').onclick=()=>{if(!current||fileProtection().locked)return;hideHome();const s=sourceInput($('source').value,text(files.get(current)));record();sourceDrafts.remove(current);files.set(current,bytes(s));sourceApplications.set(current,s);render();toast(data().error?'源码解析失败：'+data().error:'已应用源码。')};
 function download(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 let reviewedFiles=null;
@@ -320,7 +325,7 @@ $('searchResults').addEventListener('click',hideHome,true);
 $('homeButton').onclick=()=>{homeVisible=!homeVisible;if(homeVisible){playback.pause();comparison.dispose();homeModel=null;renderHome();}else render();};
 function routeSimulation(route){const preset=routePreset(route);return preset?structuredClone(preset):routeMatches(route,route.kind==='container'?simulation.containerTitle:simulation.formTitle)?simulation:route.kind==='container'?{...simulation,containerTitle:route.sample}:{...simulation,formTitle:route.sample,formButtons:[]};}
 function renderHome(){
-  const home=$('home');home.hidden=!homeVisible;if(homeVisible)$('previewStatus').hidden=true;$('viewport').hidden=homeVisible||$('dualPreview').checked;$('comparison').hidden=homeVisible||!$('dualPreview').checked;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
+  const home=$('home');home.hidden=!homeVisible;if(homeVisible){$('previewStatus').hidden=true;$('stateSamples').hidden=true;}$('viewport').hidden=homeVisible||$('dualPreview').checked;$('comparison').hidden=homeVisible||!$('dualPreview').checked;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
   if(!homeVisible)return;
   $('properties').replaceChildren();$('properties').textContent='选择一个界面查看属性。';
   $('screenName').textContent='界面总览 · 布局缩略图';
@@ -346,6 +351,7 @@ function renderStudio(){
  const factorySample=root?.obj.factory?.control_ids&&currentInstances?.data?.[root.path[0]];
  const analysisObject=factorySample||(root?currentResolved?.data?.[root.path[0]]||root.obj:{});
  const schemas=renderFields($('channelStudio'),analysisObject,files,simulation,{index:runtimeNodes.get(selection)?._collectionIndex,onApply:applySimulation,onError:toast});
+ renderStateSamples(root,selected,analysisObject);
  renderPreviewStatus(root,schemas);
  if(factorySample){const note=document.createElement('small');note.id='factoryPreviewNote';note.textContent='沿工厂模板识别通道；画布为只读事件样本，不模拟触发频率或同时实例数。';$('channelStudio').append(note);}
  const select=$('savedPresets'),previous=select.value;select.replaceChildren();
@@ -413,8 +419,8 @@ $('mode').onchange=e=>{hideHome();mode=e.target.value;$('buttonState').disabled=
 
 function paintText(el,value){for(const run of textRuns(value)){const span=document.createElement('span');span.textContent=run.text;Object.assign(span.style,run.style);el.append(span)}}
 
-$('simulate').onclick=()=>{try{const value=JSON.parse($('simulation').value);if(!value||typeof value!=='object'||Array.isArray(value))throw Error('需要 JSON 对象');validateSimulation(value);simulation=value;rememberSimulation();if(activeForm)showForm(activeForm,true);else render();toast('已应用模拟数据')}catch(e){toast('模拟数据无效：'+e.message)}};
-$('preset').onchange=e=>{const presets={martial:{formTitle:'武道天书',formBody:''},star:{formTitle:'北斗星空图',formBody:''},quest:{formTitle:'MSQB:小页|任务',formBody:'',bindings:{'#form_button_text':'QRA0任务说明','#form_button_texture':'textures/ui/questbook/icon_unknown'}},hud:{title:'MSHUD:境界：炼体\n气血：100 / 100',subtitle:'',actionbar:''}};$('simulation').value=JSON.stringify(presets[e.target.value]||{},null,2);const project=screens(files);const target=e.target.value==='hud'?[...project.entries,...(project.custom||[])].find(s=>s.node.name==='ms_status_panel'):project.entries.find(s=>s.namespace==='server_form'&&s.node.name==='long_form');if(target){activeForm=null;current=target.file;selection=target.node.id;expanded.add(target.id)}$('simulate').click()};
+$('simulate').onclick=()=>{try{const value=JSON.parse($('simulation').value);if(!value||typeof value!=='object'||Array.isArray(value))throw Error('需要 JSON 对象');validateSimulation(value);if(!applyingSample)stateSamples.manual();simulation=value;rememberSimulation();if(activeForm)showForm(activeForm,true);else render();toast('已应用模拟数据')}catch(e){toast('模拟数据无效：'+e.message)}};
+$('preset').onchange=e=>{if(e.target.value==='quest'){const route=model().routes.find(item=>item.kind!=='container'&&item.sample?.startsWith('MSQB:'));if(route){openRoute(route);if(stateSamples.groups.length){stateSamples.first();return;}}}const presets={martial:{formTitle:'武道天书',formBody:''},star:{formTitle:'北斗星空图',formBody:''},quest:{formTitle:'MSQB:小页|任务',formBody:'',bindings:{'#form_button_text':'QRA0任务说明','#form_button_texture':'textures/ui/questbook/icon_unknown'}},hud:{title:'MSHUD:境界：炼体\n气血：100 / 100',subtitle:'',actionbar:''}};$('simulation').value=JSON.stringify(presets[e.target.value]||{},null,2);const project=screens(files);const target=e.target.value==='hud'?[...project.entries,...(project.custom||[])].find(s=>s.node.name==='ms_status_panel'):project.entries.find(s=>s.namespace==='server_form'&&s.node.name==='long_form');if(target){activeForm=null;current=target.file;selection=target.node.id;expanded.add(target.id)}$('simulate').click()};
 
 function canvasScale(w,h){return ['fit','focus'].includes($('zoom').value)?fitScale(w,h,$('viewport').clientWidth,$('viewport').clientHeight):Number($('zoom').value)}
 function refreshScene(){if(activeForm)showForm(activeForm,true);else render()}
@@ -485,13 +491,26 @@ function renderPreviewStatus(root,schemas=[]){
  if(changed)document.querySelector('.bottom').scrollTop=0;
  status.hidden=homeVisible||!readiness.message;if(status.hidden)return;
  status.dataset.kind=readiness.kind;
+ if(stateSamples.exampleHidden&&readiness.kind!=='parse-error'){readiness.message='当前为隐藏状态示例，选择其他包内状态即可恢复预览。';readiness.canFill=false;}
  const message=document.createElement('span');message.textContent=readiness.message;status.append(message);
  if(readiness.kind==='parse-error')status.append(button('查看源码',()=>{$('sourceDetails').open=true;$('sourceDetails').scrollIntoView({block:'nearest'});}));
  else{
   status.append(button(readiness.canFill?'打开通道填表':'打开模拟数据',()=>openSimulationFields(readiness.canFill)));
+  if(stateSamples.groups.length)status.append(button('一键预览包内示例',()=>stateSamples.first()));
   if(readiness.kind==='missing-buttons')status.append(button('导入按钮模拟 JSON',()=>$('importSimulation').click()));
  }
  if(changed){
   if(readiness.kind!=='parse-error'){$('simulationDetails').open=true;if(readiness.canFill)$('channelDetails').open=true;}
  }
+}
+
+function renderStateSamples(root,selected,analysisObject){
+ const navigation=model();let route=selected&&routeForSelection(navigation,current,selected);
+ if(!route&&root)route=navigation.routes.find(item=>item.kind!=='container'&&item.definition?.file===current&&item.definition.node.path[0]===root.path[0]);
+ if(!route&&root){const match=routeForTitle(navigation,simulation.formTitle);if(match?.screen.file===current&&match.node.path[0]===root.path[0])route=match;}
+ const containers=navigation.routes.filter(item=>item.kind==='container'&&item.screen.file===current&&item.node.path[0]===root?.path[0]);
+ const target=route&&route.screen.file===current?at(currentResolved?.data,route.node.path)||analysisObject:analysisObject;
+ const key=route?.id||current+'::'+root?.path[0],cacheKey='state-samples:'+current+'::'+key+'::'+(currentResolved?.data?.[root?.path[0]]?.$screen_content||'');
+ const groups=cached(files,cacheKey,()=>sampleCatalog(target,files,current,{formTitle:route?.sample,titleMatches:title=>routeMatches(route,title),containers}));
+ stateSamples.render(key,groups,simulation,{hidden:homeVisible});
 }
