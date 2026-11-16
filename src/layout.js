@@ -1,27 +1,12 @@
 import {dimension} from './core.js';
 import {runtimeObject} from './bindings.js';
-import {fontMetrics} from './font.js';
-import {stripFormatting} from './text.js';
+import {layoutText,glyphAdvance} from './text-layout.js';
 
 const anchors = {top_left:[0,0],top_middle:[.5,0],top_right:[1,0],left_middle:[0,.5],center:[.5,.5],right_middle:[1,.5],bottom_left:[0,1],bottom_middle:[.5,1],bottom_right:[1,1]};
 const contentPattern = /^(-?[\d.]+)%(cm|c)(?:\s*([+-])\s*([\d.]+)(?:px)?)?$/;
 export const contentDimension = value => typeof value === 'string' ? contentPattern.exec(value.trim()) : null;
 
-export function textExtent(obj, maxWidth = Infinity, measure = (s, size) => [...s].reduce((w,c) => w + size * (/[^\x00-\xff]/.test(c) ? 1 : .6), 0)) {
-  const font = fontMetrics(obj), limit = Math.max(0, maxWidth);
-  let width = 0, rows = 0;
-  for (const line of stripFormatting(obj.text ?? '').split('\n')) {
-    let current = 0;
-    rows++;
-    for (const char of line) {
-      const advance = measure(char, font.fontSize);
-      if (current > 0 && current + advance > limit) { width = Math.max(width,current); rows++; current = 0; }
-      current += advance;
-    }
-    width = Math.max(width,current);
-  }
-  return {w:Math.min(width,limit),h:rows * (font.lineHeight + (Number(obj.line_padding)||0))};
-}
+export function textExtent(obj,maxWidth=Infinity,measure=glyphAdvance){const {w,h}=layoutText(obj,maxWidth,measure);return {w,h};}
 
 // Measure children before content-sized parents; layout percentages afterward.
 export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode = 'edit',measureText} = {}) {
@@ -104,5 +89,6 @@ export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode 
     }
   }
   if(root)place(root,{x:0,y:0,w:width,h:height});
-  return {runtime,rects,total:relevant.length,pruned:relevant.length-rects.size,issues};
+  const textLayouts=new Map();for(const n of relevant){const o=runtime.get(n.id),r=rects.get(n.id);if(r&&['label','button'].includes(o.type))textLayouts.set(n.id,layoutText(o,r.w,measureText||glyphAdvance));}
+  return {runtime,rects,textLayouts,total:relevant.length,pruned:relevant.length-rects.size,issues};
 }

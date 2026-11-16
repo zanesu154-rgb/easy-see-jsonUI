@@ -1,3 +1,5 @@
+import {PreviewFont} from './preview-font.js';
+import {paintGameText} from './text-layout.js';
 import {SourceDrafts} from './source-drafts.js';
 import {mergeImport} from './import-resources.js';
 import {layoutScene} from './layout.js';
@@ -18,6 +20,7 @@ import {resolveProject} from './resolver.js';
 import {screens} from './project.js';
 import {parse,nodes,at} from './core.js';
 const sourceDrafts=new SourceDrafts();
+const previewFont=new PreviewFont();
 const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='edit',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
 const text=bytes=>new TextDecoder().decode(bytes);const bytes=s=>new TextEncoder().encode(s);
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',5000)}
@@ -25,8 +28,22 @@ function snapshot(){return {files:new Map(files),current,selection}}function res
 function data(){return parse(text(files.get(current)||new Uint8Array()))}function save(d){files.set(current,bytes(JSON.stringify(d,null,2)+'\n'))}
 function button(label,fn,cls=''){const el=document.createElement('button');el.textContent=label;el.className=cls;el.onclick=fn;return el}
 function render(){urls.forEach(URL.revokeObjectURL);urls=[];$('tree').replaceChildren();$('properties').replaceChildren();$('issues').replaceChildren();$('canvas').replaceChildren();$('undo').disabled=!history.length;$('redo').disabled=!future.length;$('export').disabled=!files.size;const parsed=data();const resolved=resolveProject(files,current);const instances=instantiateCollections(resolved.data,files,current,simulation,activeForm);const ns=nodes(instances.data);$('collectionStats').textContent='按钮数据 '+formButtons(simulation,activeForm).length+' 项 · 生成实例 '+instances.created+' 个'+(instances.warnings.length?' · '+instances.warnings.join('；'):'');if(!ns.some(n=>n.id===selection))selection=ns[0]?.id||'';const selected=ns.find(n=>n.id===selection);const filter=$('search').value.toLowerCase();const project=screens(files,$('showOriginal').checked);let activeRoot=selected;while(activeRoot?.parent)activeRoot=activeRoot.parent;
-let groupKey='',groupBody;for(const screen of project.entries){const key=screen.file+'::'+screen.namespace;if(key!==groupKey){groupKey=key;const group=document.createElement('details');group.open=screen.file===current;const heading=document.createElement('summary');heading.textContent=(screen.namespace||'界面覆盖')+' · '+screen.file;group.append(heading);groupBody=document.createElement('div');group.append(groupBody);$('tree').append(group)}const active=screen.file===current&&screen.node.id===activeRoot?.id;const open=expanded.has(screen.id);const row=button((open?'▾ ':'▸ ')+screen.node.name,()=>{activeForm=null;const title=titleForScene(screen,simulation);if(title!==undefined)simulation={...simulation,formTitle:title};current=screen.file;selection=screen.node.id;if(open)expanded.delete(screen.id);else expanded.add(screen.id);render()},'tree-item file'+(active?' active':''));row.title=screen.file;groupBody.append(row);if(open){const treeResolved=resolveProject(files,screen.file);const children=nodes(instantiateCollections(treeResolved.data,files,screen.file,simulation,activeForm).data);for(const n of children){let root=n;while(root.parent)root=root.parent;if(root.id!==screen.node.id||!n.parent)continue;if(!$('showOriginal').checked&&isVanilla(treeResolved.origins.get(n.id)?.file||''))continue;if(filter&&!n.name.toLowerCase().includes(filter))continue;const el=button('└ '+n.name,()=>{activeForm=null;if(current!==screen.file||JSON.parse(selection||'[]')[0]!==n.path[0]){current=screen.file;selection=n.id;render()}else selectNode(n)},'tree-item'+(screen.file===current&&selection===n.id?' active':''));el.dataset.node=n.id;el.dataset.file=screen.file;el.style.paddingLeft=(12+(n.path.length-1)/3*14)+'px';groupBody.append(el);}for(const rule of screen.triggers){const hint=document.createElement('small');hint.textContent='名称触发：'+rule.name+' · '+rule.fields.join(', ')+' · '+rule.kind;hint.title=rule.expression;groupBody.append(hint);}for(const link of screen.links){const hint=document.createElement('small');hint.textContent='可能关联脚本：'+(link.displayTitle||stripFormatting(link.title))+' · '+link.file+':'+link.line;groupBody.append(hint);}}}
-if(project.custom?.length){const group=document.createElement('details'),heading=document.createElement('summary');group.open=true;heading.textContent='自定义控件（'+project.custom.length+'）';group.append(heading);for(const screen of project.custom){const row=button(screen.namespace+' · '+screen.node.name,()=>{activeForm=null;current=screen.file;selection=screen.node.id;render()},'tree-item');row.title=screen.insertions.map(i=>'插入位置：'+i.file+' → '+i.root+' · '+i.operation).join('\n');group.append(row);}$('tree').append(group);}if(project.templates.length){const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='引用模板（'+project.templates.length+'，非独立界面）';details.append(summary);for(const template of project.templates){const el=button(template.namespace+' · '+template.node.name,()=>{activeForm=null;current=template.file;selection=template.node.id;render()},'tree-item');el.title=template.file;details.append(el)}$('tree').append(details)}if(project.forms.length){const heading=document.createElement('div');heading.className='heading';heading.textContent='脚本表单（静态识别）';$('tree').append(heading);for(const form of project.forms){$('tree').append(button('◇ '+(form.displayTitle||stripFormatting(form.title)),()=>showForm(form),'tree-item'));}}
+const projectGroups=new Map();let groupKey='',groupBody;for(const screen of project.entries){const key=screen.file+'::'+screen.namespace;if(key!==groupKey){groupKey=key;const group=document.createElement('details');group.open=screen.file===current;const heading=document.createElement('summary');heading.textContent=(screen.namespace||'界面覆盖')+' · '+screen.file;group.append(heading);groupBody=document.createElement('div');group.append(groupBody);projectGroups.set(key,{group,body:groupBody});$('tree').append(group)}const active=screen.file===current&&screen.node.id===activeRoot?.id;const open=expanded.has(screen.id);const row=button((open?'▾ ':'▸ ')+screen.node.name,()=>{activeForm=null;const title=titleForScene(screen,simulation);if(title!==undefined)simulation={...simulation,formTitle:title};current=screen.file;selection=screen.node.id;if(open)expanded.delete(screen.id);else expanded.add(screen.id);render()},'tree-item file'+(active?' active':''));row.title=screen.file;groupBody.append(row);if(open){const treeResolved=resolveProject(files,screen.file);const children=nodes(instantiateCollections(treeResolved.data,files,screen.file,simulation,activeForm).data);for(const n of children){let root=n;while(root.parent)root=root.parent;if(root.id!==screen.node.id||!n.parent)continue;if(!$('showOriginal').checked&&isVanilla(treeResolved.origins.get(n.id)?.file||''))continue;if(filter&&!n.name.toLowerCase().includes(filter))continue;const el=button('└ '+n.name,()=>{activeForm=null;if(current!==screen.file||JSON.parse(selection||'[]')[0]!==n.path[0]){current=screen.file;selection=n.id;render()}else selectNode(n)},'tree-item'+(screen.file===current&&selection===n.id?' active':''));el.dataset.node=n.id;el.dataset.file=screen.file;el.style.paddingLeft=(12+(n.path.length-1)/3*14)+'px';groupBody.append(el);}for(const rule of screen.triggers){const hint=document.createElement('small');hint.textContent='名称触发：'+rule.name+' · '+rule.fields.join(', ')+' · '+rule.kind;hint.title=rule.expression;groupBody.append(hint);}for(const link of screen.links){const hint=document.createElement('small');hint.textContent='可能关联脚本：'+(link.displayTitle||stripFormatting(link.title))+' · '+link.file+':'+link.line;groupBody.append(hint);}}}
+if(project.custom?.length){
+  const groups=new Map();
+  for(const screen of project.custom){
+    const key=screen.file+'::'+screen.namespace;
+    if(!groups.has(key)){
+      let owner=projectGroups.get(key);
+      if(!owner){const group=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div');summary.textContent=screen.namespace+' · '+screen.file;group.append(summary,body);$('tree').append(group);owner={group,body};projectGroups.set(key,owner);}
+      owner.group.open=true;
+      const group=document.createElement('details'),heading=document.createElement('summary');group.open=true;
+      heading.textContent='自定义控件（'+project.custom.filter(s=>s.file===screen.file&&s.namespace===screen.namespace).length+'）';group.append(heading);owner.body.append(group);groups.set(key,group);
+    }
+    const row=button(screen.namespace+' · '+screen.node.name,()=>{activeForm=null;current=screen.file;selection=screen.node.id;render()},'tree-item'+(current===screen.file&&activeRoot?.id===screen.node.id?' active':''));
+    row.title=screen.insertions.map(i=>'插入位置：'+i.file+' → '+i.root+' · '+i.operation).join('\n');groups.get(key).append(row);
+  }
+}if(project.templates.length){const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='引用模板（'+project.templates.length+'，非独立界面）';details.append(summary);for(const template of project.templates){const el=button(template.namespace+' · '+template.node.name,()=>{activeForm=null;current=template.file;selection=template.node.id;render()},'tree-item');el.title=template.file;details.append(el)}$('tree').append(details)}if(project.forms.length){const heading=document.createElement('div');heading.className='heading';heading.textContent='脚本表单（静态识别）';$('tree').append(heading);for(const form of project.forms){$('tree').append(button('◇ '+(form.displayTitle||stripFormatting(form.title)),()=>showForm(form),'tree-item'));}}
 $('screenName').textContent=current||'界面预览';showSource();const scene=draw(ns);const issues=sceneIssues({parsed,resolved,ns,runtime:scene.runtime,files,file:current,rootName:selected?.path[0],layoutIssues:scene.issues});$('count').textContent=`(${issues.length} 类 / ${issues.reduce((sum,i)=>sum+i.count,0)} 项)`;if(!issues.length)$('issues').textContent='✓ 未发现已知问题；实际游戏效果仍需在基岩版验证。';for(const issue of issues){const label=(issue.severity==='error'?'● ':'○ ')+issue.message+(issue.count>1?'（'+issue.count+' 处）':'');const el=button(label,()=>{if(issue.path)selection=JSON.stringify(issue.path);render()},'issue '+issue.severity);el.title=issue.paths?.map(p=>p.join('/')).join('\n')||'';$('issues').append(el);}if(selected)properties(selected);else $('properties').textContent='导入资源包，或打开示例开始编辑。';}
 function showSource(){
   const draft=sourceDrafts.read(current,files.has(current)?text(files.get(current)):'');
@@ -48,9 +65,7 @@ function draw(ns) {
   Object.assign(canvas.style,{width:w+'px',height:h+'px',transform:`scale(${zoom})`});
   canvas.dataset.scale=zoom;$('stage').style.width=w*zoom+'px';$('stage').style.height=h*zoom+'px';
   let root=ns.find(n=>n.id===selection);while(root?.parent)root=root.parent;
-  const context=document.createElement('canvas').getContext('2d');
-  const measureText=(value,size)=>{context.font=`${size}px "Microsoft YaHei", sans-serif`;return context.measureText(value).width;};
-  const scene=layoutScene(ns,root?.id,{width:w,height:h,form:activeForm,simulation,mode,measureText});
+  const scene=layoutScene(ns,root?.id,{width:w,height:h,form:activeForm,simulation,mode,measureText:previewFont.measure});
   runtimeNodes=scene.runtime;
   const elements=new Map();
   const updateStats=()=>{
@@ -66,9 +81,9 @@ function draw(ns) {
     if(o.clips_children===true)el.style.overflow='hidden';
     if(Array.isArray(o.color))el.style.color=`rgb(${o.color.slice(0,3).map(c=>Math.round(c*255)).join(',')})`;
     if(o.type==='label'||o.type==='button') {
-      const label=document.createElement('div');label.className='control-text';paintText(label,o.text||'');el.append(label);
+      const label=document.createElement('div');label.className='control-text';paintGameText(label,o,scene.textLayouts.get(n.id),{family:previewFont.family,bitmap:previewFont.bitmap});el.append(label);
       Object.assign(el.style,{display:'flex',alignItems:'center',justifyContent:'center'});
-      label.style.textAlign=o.text_alignment||'center';
+      label.style.textAlign=o.text_alignment||(o.type==='label'?'left':'center');
       if(o.type==='label'){label.style.width='100%';el.style.alignItems='flex-start';}
     }
     if(o.type==='button'&&!o.default_control&&!o.hover_control&&!o.pressed_control){el.style.background='#4d665c';el.style.border='2px solid #8caa9a';}
@@ -131,7 +146,7 @@ async function loadVanilla(list){try{const archive=new Map();for(const f of list
 $('vanillaFiles').onchange=e=>{if(e.target.files.length)loadVanilla([...e.target.files]);e.target.value=''};$('vanillaDirectory').onchange=e=>loadVanilla([...e.target.files]);
 
 let officialBusy=false,officialAgain=false;
-async function syncOfficial(){if(officialBusy){officialAgain=true;return}officialBusy=true;$('vanilla').disabled=true;$('vanillaStatus').textContent='正在获取官方预览资源…';const project=files;try{const result=await loadOfficial(project,{simulation,extraTextures:[...runtimeNodes.values()].map(o=>o.texture),progress:p=>$('vanillaStatus').textContent='官方资源加载中：'+p.done+' 项'});if(files!==project){$('vanillaStatus').textContent='工程已变化，请重新补齐原版资源';return}const swept=sweepOfficial(files,result.resources);invalidate(files);files=swept.files;const available=screens(files).entries;if(!(files.has(current)&&Object.hasOwn(resolveProject(files,current).data||{},JSON.parse(selection||'[]')[0]))&&available.length){current=available[0].file;selection=available[0].node.id}refreshScene();$('vanillaStatus').textContent='官方预览资源：'+result.resources.size+' 项 · 跳过已有 '+result.skipped.length+' 项 · '+OFFICIAL_REF.slice(0,7)+(result.failed.length?' · '+result.failed.length+' 项失败':'')+(result.limited?' · 达到本次下载上限，可再次补齐':'');toast('已补齐可获取的官方资源；完整游戏渲染仍取决于版本和功能支持。')}catch(e){$('vanillaStatus').textContent='官方资源加载失败，可重试或手动导入';toast(e.message)}finally{officialBusy=false;$('vanilla').disabled=false;if(officialAgain){officialAgain=false;queueMicrotask(()=>syncOfficial())}}}
+async function syncOfficial(){if(officialBusy){officialAgain=true;return}officialBusy=true;$('vanilla').disabled=true;$('vanillaStatus').textContent='正在获取官方预览资源…';const project=files;try{const result=await loadOfficial(project,{simulation,extraTextures:[...runtimeNodes.values()].map(o=>o.texture),progress:p=>{if(files===project)$('vanillaStatus').textContent='官方资源加载中：'+p.done+' 项'}});if(files!==project)return;const swept=sweepOfficial(files,result.resources);invalidate(files);files=swept.files;const available=screens(files).entries;if(!(files.has(current)&&Object.hasOwn(resolveProject(files,current).data||{},JSON.parse(selection||'[]')[0]))&&available.length){current=available[0].file;selection=available[0].node.id}refreshScene();$('vanillaStatus').textContent='官方预览资源：'+result.resources.size+' 项 · 跳过已有 '+result.skipped.length+' 项 · '+OFFICIAL_REF.slice(0,7)+(result.failed.length?' · '+result.failed.length+' 项失败':'')+(result.limited?' · 达到本次下载上限，可再次补齐':'');toast('已补齐可获取的官方资源；完整游戏渲染仍取决于版本和功能支持。')}catch(e){if(files===project){$('vanillaStatus').textContent='官方资源加载失败，可重试或手动导入';toast(e.message)}}finally{officialBusy=false;$('vanilla').disabled=false;if(officialAgain){officialAgain=false;queueMicrotask(()=>syncOfficial())}}}
 
 $('importSimulation').onclick=()=>$('simulationFile').click();
 $('simulationFile').onchange=async event=>{
@@ -143,5 +158,15 @@ $('simulationFile').onchange=async event=>{
     $('simulation').value=JSON.stringify(value,null,2);
     $('simulate').click();
   }catch(error){toast('模拟数据导入失败：'+error.message);}
+  finally{event.target.value='';}
+};
+
+
+$('importFont').onclick=()=>$('fontFile').click();
+$('resetFont').onclick=()=>{previewFont.reset();$('fontStatus').textContent='预览字体：游戏字宽近似';refreshScene();};
+$('fontFile').onchange=async event=>{
+  const file=event.target.files[0];if(!file)return;
+  try{$('fontStatus').textContent=await previewFont.load(file);refreshScene();toast('已加载本地预览字体，不会写入资源包。');}
+  catch(error){toast('字体导入失败：'+error.message);}
   finally{event.target.value='';}
 };
