@@ -14,8 +14,9 @@ export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode 
   const relevant = root ? ns.filter(n=>n.path[0]===root.path[0]) : [];
   const runtime = new Map(), children = new Map(), sizes = new Map(), rects = new Map();
   for (const n of relevant) {
-    if (n.parent && (!runtime.has(n.parent.id) || runtime.get(n.parent.id)._layoutHidden)) continue;
+    if (n.parent && (!runtime.has(n.parent.id) || runtime.get(n.parent.id)._layoutHidden || runtime.get(n.parent.id)._missingDataPlaceholder)) continue;
     const o = runtimeObject(n.obj,form,simulation,n.parent?runtime.get(n.parent.id)._context:{});
+    o._missingDataPlaceholder=mode==='edit'&&o._collectionMissing;
     o._layoutHidden = o.ignored === true || o.visible === false && !(mode==='edit' && o._collectionMissing);
     runtime.set(n.id,o);
     if(n.parent) { const list=children.get(n.parent.id)||[];list.push(n);children.set(n.parent.id,list); }

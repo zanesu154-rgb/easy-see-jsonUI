@@ -1,3 +1,4 @@
+import {previewReadiness} from './preview-readiness.js';
 import {Playback} from './playback.js';
 import {Comparison} from './comparison.js';
 import {Presets,validateSimulation} from './presets.js';
@@ -42,7 +43,7 @@ const editSession=new EditSession();
 const sourceApplications=new Map();
 const routePresets=new Map();
 const presets=new Presets();
-let sceneInfo=null,currentInstances=null,currentResolved=null;
+let sceneInfo=null,currentInstances=null,currentResolved=null,previewSceneKey='';
 let sceneNodes=[],navigationOrigin=null,lastPick=null,homeVisible=false,homeModel=null;
 const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='edit',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
 const comparison=new Comparison($('comparison'));
@@ -133,18 +134,19 @@ function draw(ns,collectionWarnings=[]) {
     const o=runtimeNodes.get(n.id),r=scene.rects.get(n.id);if(!r)continue;
     const el=document.createElement('div'),font=fontMetrics(o);
     el.dataset.node=n.id;el.dataset.file=current;el.dataset.controlName=n.name;el.dataset.parent=n.parent?.id||'';
+    if(o._missingDataPlaceholder){el.dataset.missingIndex=o._collectionIndex;el.title='按钮序号 '+o._collectionIndex+' 缺少模拟数据；当前仅为编辑占位。';}
     el.className='control'+(n.id===selection?' selected':'')+(o._collectionMissing?' missing-data':'');
     Object.assign(el.style,{left:r.x+'px',top:r.y+'px',width:r.w+'px',height:r.h+'px',opacity:typeof o.alpha==='number'?o.alpha:1,zIndex:Number(o.layer)||0,fontSize:font.fontSize+'px',lineHeight:(font.lineHeight+(Number(o.line_padding)||0))+'px'});
     if(o.clips_children===true)el.style.overflow='hidden';
     if(Array.isArray(o.color))el.style.color=`rgb(${o.color.slice(0,3).map(c=>Math.round(c*255)).join(',')})`;
-    if(o.type==='label'||o.type==='button') {
+    if(!o._missingDataPlaceholder&&(o.type==='label'||o.type==='button')) {
       const label=document.createElement('div');label.className='control-text';paintGameText(label,o,scene.textLayouts.get(n.id),{family:previewFont.family,bitmap:previewFont.bitmap,stretch:$('stretchGlyphs').checked});el.append(label);
       Object.assign(el.style,{display:'flex',alignItems:'center',justifyContent:'center'});
       label.style.textAlign=o.text_alignment||(o.type==='label'?'left':'center');
       if(o.type==='label'){label.style.width='100%';el.style.alignItems='flex-start';}
     }
-    if(o.type==='button'&&!o.default_control&&!o.hover_control&&!o.pressed_control){el.style.background='#4d665c';el.style.border='2px solid #8caa9a';}
-    if(o.type==='image'&&typeof o.texture==='string'&&o.texture) {
+    if(!o._missingDataPlaceholder&&o.type==='button'&&!o.default_control&&!o.hover_control&&!o.pressed_control){el.style.background='#4d665c';el.style.border='2px solid #8caa9a';}
+    if(!o._missingDataPlaceholder&&o.type==='image'&&typeof o.texture==='string'&&o.texture) {
       const path=resource(o.texture).path;
       if(path){const url=URL.createObjectURL(new Blob([files.get(path)],{type:/\.jpe?g$/i.test(path)?'image/jpeg':'image/png'}));urls.push(url);Object.assign(el.style,textureStyle(files,path,o,r,url));}
       else{el.title=resource(o.texture).message||'贴图缺失';el.style.background='repeating-conic-gradient(#a34e9a 0% 25%,#25202b 0% 50%) 0/16px 16px';}
@@ -204,7 +206,7 @@ if(importedSettings!==null)new EditSession().loadSettings(importedSettings);
 const presetEntries=[...incoming].filter(([path])=>isEditorFile(path)&&path.endsWith('/presets.json'));if(presetEntries.length>1)throw Error('包中包含多份预设文件');
 const importedPresets=presetEntries.length?text(presetEntries[0][1]):null;if(importedPresets!==null)new Presets().load(importedPresets);
 for(const [path]of incoming)if(isEditorFile(path))incoming.delete(path);
-const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){presets.clear();homeVisible=true;homeModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
+const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){previewSceneKey='';presets.clear();homeVisible=true;homeModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
 $('import').onclick=()=>{appendImport=false;$('files').click()};$('dependency').onclick=()=>{appendImport=true;$('files').click()};$('files').onchange=e=>load([...e.target.files]);document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();load([...e.dataTransfer.files])});$('search').oninput=renderSearch;$('resolution').onchange=refreshScene;$('guiScale').onchange=refreshScene;$('zoom').onchange=refreshScene;$('undo').onclick=()=>{if(history.length){future.push(snapshot());restore(history.pop())}};$('redo').onclick=()=>{if(future.length){history.push(snapshot());restore(future.pop())}};$('apply').onclick=()=>{if(!current||fileProtection().locked)return;hideHome();const s=sourceInput($('source').value,text(files.get(current)));record();sourceDrafts.remove(current);files.set(current,bytes(s));sourceApplications.set(current,s);render();toast(data().error?'源码解析失败：'+data().error:'已应用源码。')};
 function download(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 let reviewedFiles=null;
@@ -318,7 +320,7 @@ $('searchResults').addEventListener('click',hideHome,true);
 $('homeButton').onclick=()=>{homeVisible=!homeVisible;if(homeVisible){playback.pause();comparison.dispose();homeModel=null;renderHome();}else render();};
 function routeSimulation(route){const preset=routePreset(route);return preset?structuredClone(preset):routeMatches(route,route.kind==='container'?simulation.containerTitle:simulation.formTitle)?simulation:route.kind==='container'?{...simulation,containerTitle:route.sample}:{...simulation,formTitle:route.sample,formButtons:[]};}
 function renderHome(){
-  const home=$('home');home.hidden=!homeVisible;$('viewport').hidden=homeVisible||$('dualPreview').checked;$('comparison').hidden=homeVisible||!$('dualPreview').checked;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
+  const home=$('home');home.hidden=!homeVisible;if(homeVisible)$('previewStatus').hidden=true;$('viewport').hidden=homeVisible||$('dualPreview').checked;$('comparison').hidden=homeVisible||!$('dualPreview').checked;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
   if(!homeVisible)return;
   $('properties').replaceChildren();$('properties').textContent='选择一个界面查看属性。';
   $('screenName').textContent='界面总览 · 布局缩略图';
@@ -343,7 +345,8 @@ function renderStudio(){
  $('containerResolved').textContent=container?'实际内容：'+(runtimeNodes.get(root.id)?.$screen_content||'未解析')+' · 显示标题：'+(runtimeNodes.get(root.id)?.$container_title||''):'';
  const factorySample=root?.obj.factory?.control_ids&&currentInstances?.data?.[root.path[0]];
  const analysisObject=factorySample||(root?currentResolved?.data?.[root.path[0]]||root.obj:{});
- renderFields($('channelStudio'),analysisObject,files,simulation,{index:runtimeNodes.get(selection)?._collectionIndex,onApply:applySimulation,onError:toast});
+ const schemas=renderFields($('channelStudio'),analysisObject,files,simulation,{index:runtimeNodes.get(selection)?._collectionIndex,onApply:applySimulation,onError:toast});
+ renderPreviewStatus(root,schemas);
  if(factorySample){const note=document.createElement('small');note.id='factoryPreviewNote';note.textContent='沿工厂模板识别通道；画布为只读事件样本，不模拟触发频率或同时实例数。';$('channelStudio').append(note);}
  const select=$('savedPresets'),previous=select.value;select.replaceChildren();
  for(const entry of presets.entries){const option=document.createElement('option');option.value=entry.id;option.textContent=entry.name+' · '+entry.scene.split('::')[0];select.append(option);}
@@ -467,3 +470,28 @@ async function refreshCacheStatus(){const stats=await officialCache.inspect();$(
 $('refreshCache').onclick=refreshCacheStatus;
 $('clearCache').onclick=async()=>{await officialCache.clear();await refreshCacheStatus();toast('已清除本版本下载缓存，当前工程中的预览资源仍可使用。');};
 refreshCacheStatus();
+
+function openSimulationFields(fill=false){
+ $('simulationDetails').open=true;
+ if(fill)$('channelDetails').open=true;
+ const target=(fill?$('channelDetails'):$('simulationDetails')).querySelector('summary');
+ target.scrollIntoView({block:'start'});
+}
+function renderPreviewStatus(root,schemas=[]){
+ const status=$('previewStatus');status.replaceChildren();
+ const readiness=previewReadiness(sceneInfo?.scene||{runtime:new Map(),rects:new Map()},sceneNodes,root?.path[0],{error:data().error,buttonCount:formButtons(simulation,activeForm).length,schemas,mode});
+ const key=current+'::'+root?.path[0],changed=!homeVisible&&key!==previewSceneKey;
+ if(!homeVisible)previewSceneKey=key;
+ if(changed)document.querySelector('.bottom').scrollTop=0;
+ status.hidden=homeVisible||!readiness.message;if(status.hidden)return;
+ status.dataset.kind=readiness.kind;
+ const message=document.createElement('span');message.textContent=readiness.message;status.append(message);
+ if(readiness.kind==='parse-error')status.append(button('查看源码',()=>{$('sourceDetails').open=true;$('sourceDetails').scrollIntoView({block:'nearest'});}));
+ else{
+  status.append(button(readiness.canFill?'打开通道填表':'打开模拟数据',()=>openSimulationFields(readiness.canFill)));
+  if(readiness.kind==='missing-buttons')status.append(button('导入按钮模拟 JSON',()=>$('importSimulation').click()));
+ }
+ if(changed){
+  if(readiness.kind!=='parse-error'){$('simulationDetails').open=true;if(readiness.canFill)$('channelDetails').open=true;}
+ }
+}

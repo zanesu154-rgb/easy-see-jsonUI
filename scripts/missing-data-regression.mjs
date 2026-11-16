@@ -1,0 +1,60 @@
+// Empty simulation, editable placeholders and visible data-entry prompts. Local app :5173, Chromium CDP :9222.
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+const [addon,dependency,vanillaArchive]=process.argv.slice(2);
+if(!addon||!dependency||!vanillaArchive)throw Error('Usage: node scripts/simulation-regression.mjs <reference.mcaddon> <server_form.json> <full-vanilla.zip>');
+const target=await(await fetch('http://127.0.0.1:9222/json/new?about:blank',{method:'PUT'})).json();
+const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j;});
+let sequence=0;const pending=new Map(),errors=[];
+ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails);const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(m.error):p.resolve(m.result);}};
+const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
+const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
+const waitFor=async expression=>{for(let i=0;i<80;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+expression);};
+const upload=async(selector,path)=>{const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});await send('DOM.setFileInputFiles',{nodeId,files:[path]});};
+const source=()=>evaluate("document.getElementById('source').value");
+const displayed=value=>value.replace(/\r\n/g,'\n');
+const prop=async(key,value)=>evaluate(`(()=>{const input=[...document.querySelectorAll('#properties label')].find(el=>el.firstChild.textContent===${JSON.stringify(key)})?.querySelector('input');if(!input)throw Error('Missing property');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change'));})()`);
+const select=async name=>evaluate(`(()=>{const button=[...document.querySelectorAll('#tree button')].find(b=>b.textContent===${JSON.stringify(name)});if(!button)throw Error('Missing row');button.click();})()`);
+const importText=async(text,name='safe-edit.json',archive=false)=>{
+ await evaluate(`(async()=>{let content=${JSON.stringify(text)};${archive?"const zip=new JSZip();zip.file('P/ui/test.json',content);zip.file('.easysee/project.json',JSON.stringify({version:1,generatedFiles:{'P/ui/test.json':true}}));content=await zip.generateAsync({type:'uint8array'});":''}const dt=new DataTransfer();dt.items.add(new File([content],${JSON.stringify(name)}));const input=document.getElementById('files');document.getElementById('import').click();input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);
+ await waitFor(`document.getElementById('project').textContent===${JSON.stringify(name)}`);await waitFor("!document.getElementById('vanilla').disabled");
+};
+const review=async()=>{await evaluate("document.getElementById('export').click();document.querySelectorAll('#exportChanges details').forEach(el=>el.open=true)");await new Promise(r=>setTimeout(r,50));return evaluate("({summary:document.getElementById('exportSummary').textContent,changes:document.getElementById('exportChanges').textContent,drafts:document.getElementById('exportDrafts').textContent})");};
+const cancel=()=>evaluate("document.getElementById('cancelExport').click()");
+const beginDownloads=()=>evaluate("window.__downloads=[];HTMLAnchorElement.prototype.click=function(){window.__downloads.push({name:this.download,url:this.href})}");
+const downloadText=async action=>{
+ await beginDownloads();await action();await waitFor('window.__downloads.length===1');
+ return evaluate("(async()=>{const d=window.__downloads[0],content=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',d.url);x.responseType='arraybuffer';x.onload=()=>resolve(new TextDecoder('utf-8',{ignoreBOM:true}).decode(x.response));x.onerror=reject;x.send()});return {...d,content};})()");
+};
+const waitLong=async expression=>{for(let i=0;i<600;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+expression);};
+const sim=()=>evaluate("JSON.parse(document.getElementById('simulation').value)");
+const setSim=async value=>evaluate(`document.getElementById('simulation').value=${JSON.stringify(JSON.stringify(value))};document.getElementById('simulate').click()`);
+const route=async term=>evaluate(`(()=>{const row=[...document.querySelectorAll('#tree [data-route]')].find(el=>el.textContent.includes(${JSON.stringify(term)}));if(!row)throw Error('No route '+${JSON.stringify(term)});row.click();})()`);
+const downloadBytes=async action=>{await beginDownloads();await action();await waitLong('window.__downloads.length===1');return evaluate("(async()=>{const entry=window.__downloads[0],bytes=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',entry.url);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});window.__stage3Downloaded=bytes;return {name:entry.name,size:bytes.byteLength};})()");};
+try{
+ await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1700,height:1200,deviceScaleFactor:1,mobile:false});
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await evaluate("window.fetch=async()=>{throw Error('Offline no-data regression')}");
+ await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");
+ await upload('#vanillaFiles',vanillaArchive);await waitLong("document.getElementById('vanillaStatus').textContent.startsWith('原版资源：')");
+ await route('MSQB:');
+ const empty=await evaluate("({kind:document.getElementById('previewStatus').dataset.kind,message:document.getElementById('previewStatus').textContent,placeholders:document.querySelectorAll('#canvas .control[data-missing-index]').length,glow:[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName==='glow').length,issues:document.getElementById('issues').textContent,open:document.getElementById('simulationDetails').open})");
+ assert.equal(empty.kind,'missing-buttons');assert.equal(empty.placeholders,34);assert.equal(empty.glow,0);assert.ok(empty.open);assert.match(empty.message,/尚无按钮模拟数据/);
+ for(const prefix of ['n_','g_','o_','tip_','subtab_'])assert.ok(!empty.issues.includes('textures/ui/questbook/'+prefix+'：'),prefix);
+ await evaluate("document.getElementById('mode').value='preview';document.getElementById('mode').dispatchEvent(new Event('change'))");assert.equal(await evaluate("document.querySelectorAll('#canvas .control[data-missing-index]').length"),0);assert.match(await evaluate("document.getElementById('previewStatus').textContent"),/预览模式不显示/);
+ await evaluate("document.getElementById('mode').value='edit';document.getElementById('mode').dispatchEvent(new Event('change'));document.getElementById('sourceDetails').open=true;document.querySelector('.bottom').scrollTop=document.querySelector('.bottom').scrollHeight");
+ assert.ok(await evaluate("document.querySelector('.bottom').scrollTop>0"));
+ await select('hud · ms_boss_panel');const original=await source();
+ const hidden=await evaluate("({kind:document.getElementById('previewStatus').dataset.kind,text:document.getElementById('previewStatus').textContent,scroll:document.querySelector('.bottom').scrollTop,outer:document.getElementById('simulationDetails').open,inner:document.getElementById('channelDetails').open})");assert.equal(hidden.kind,'hidden');assert.match(hidden.text,/MSBOSS:/);assert.equal(hidden.scroll,0);assert.equal(hidden.outer,true);assert.equal(hidden.inner,true);
+ await evaluate("document.querySelector('#previewStatus button').click()");assert.ok(await evaluate("document.querySelector('#channelFields input[data-kind=binary]')!==null"));
+ const before=await send('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/easy-see-boss-data-prompt.png',Buffer.from(before.data,'base64'));
+ await evaluate("document.querySelector('#channelFields input[data-kind=binary]').value='50';document.querySelector('#channelFields input[data-kind=binary]').dispatchEvent(new Event('change'))");
+ assert.ok(await evaluate("document.getElementById('previewStatus').hidden"));assert.equal(await evaluate("[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName.startsWith('fill_')).length"),24);assert.equal(await source(),original);
+ await route('MSQB:');assert.equal(await evaluate("document.getElementById('previewStatus').dataset.kind"),'missing-buttons');
+ const quest={formTitle:'MSQB:realm/kai|开阳',formButtons:Array.from({length:34},(_,i)=>({text:i<3?'P0分页':i<10?'S0小页':'QX',texture:''}))};quest.formButtons[10]={text:'QCD02节点\n奖励',texture:'textures/items/kai_trial'};
+ await evaluate(`(()=>{const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(quest))}],'sim_qb.json'));const input=document.getElementById('simulationFile');input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);await waitLong("document.getElementById('previewStatus').hidden");
+ assert.equal(await evaluate("document.querySelectorAll('#canvas .control[data-missing-index]').length"),0);assert.ok(await evaluate("[...document.querySelectorAll('#canvas .control')].some(el=>el.dataset.controlName==='glow')"));
+ const tooltip=await evaluate("(async()=>{const {renderIssues}=await import('./src/issue-list.js'),host=document.createElement('div');renderIssues(host,[{message:'缺图',severity:'warning',count:24,paths:Array.from({length:24},(_,i)=>['long_form','controls',i,'questbook_form@ms_questbook.questbook_screen','controls',15,'nodes','controls',i,'n'+i+'@ms_questbook.node','controls',0,'glow'])}],()=>{});return host.querySelector('button').title;})()");assert.ok(tooltip.length<230);assert.ok(!tooltip.includes('n23@'));
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({result:'PASS',empty,hidden,tooltip,checks:['no simulation is not reported as missing textures','editable placeholders only','preview mode hides missing items','HUD blank state explains required channel','source-scroll does not conceal data panel after scene switch','boss fields restore visible 50% bar','imported quest data restores actual controls','issue hover text stays bounded','source unchanged','no browser exceptions']},null,2));
+}finally{ws.close();await fetch('http://127.0.0.1:9222/json/close/'+target.id);}

@@ -18,7 +18,7 @@ export function sceneIssues({parsed,resolved,ns,runtime,files,file,rootName,layo
   const resources=new Map();const issues=diagnose(data,[...files.keys()],{runtime:true}).filter(i=>!i.message.includes('继承引用尚未展开')&&!i.message.includes('贴图未在导入文件中找到')).filter(i=>!i.message.startsWith('尚未支持预览控件类型')||runtime.has(JSON.stringify(i.path))&&!runtime.get(JSON.stringify(i.path))._layoutHidden);
   for(const n of ns) {
     if(rootName&&n.path[0]!==rootName)continue;
-    const o=runtime.get(n.id);if(!o||o._layoutHidden)continue;
+    const o=runtime.get(n.id);if(!o||o._layoutHidden||o._collectionMissing)continue;
     const errors=[...new Set((o._trace||[]).filter(t=>t.error).map(t=>t.error))];
     if(errors.length)issues.push({code:'bindings',path:n.path,severity:'info',message:n.name+'：'+errors.join('；')});
     if(o.texture) {

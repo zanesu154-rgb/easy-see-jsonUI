@@ -3,7 +3,7 @@ import {presentScene,clipInsets} from './scene-presentation.js';
 const label=(text,control)=>{const el=document.createElement('label');el.append(document.createTextNode(text),control);return el;};
 export function renderFields(container,obj,files,simulation,{index,onApply,onError}){
  const previous=container.querySelector('#channelSchema')?.value;container.replaceChildren();const schemas=inferChannels(obj,files);
- if(!schemas.length){const note=document.createElement('small');note.textContent='未识别到固定通道格式，可使用模拟 JSON 或已保存的预设。';container.append(note);return;}
+ if(!schemas.length){const note=document.createElement('small');note.textContent='未识别到固定通道格式，可使用模拟 JSON 或已保存的预设。';container.append(note);return [];}
  const select=document.createElement('select');select.id='channelSchema';for(const schema of schemas){const option=document.createElement('option');option.value=schema.id;option.textContent=schema.prefix+' · '+schema.channel;select.append(option);}if(schemas.some(schema=>schema.id===previous))select.value=previous;container.append(label('通道格式',select));
  const fields=document.createElement('div');fields.id='channelFields';container.append(fields);
  const populate=()=>{
@@ -20,7 +20,7 @@ export function renderFields(container,obj,files,simulation,{index,onApply,onErr
   });
   const apply=document.createElement('button');apply.id='applyChannelFields';apply.textContent='应用字段到预览';apply.onclick=()=>{try{const values=controls.map((input,i)=>schema.fields[i].kind==='binary'?binaryFill(schema.fields[i].end-schema.fields[i].start,input.value):input.value);onApply(setChannel(simulation,schema.channel,composeChannel(schema,values),index));}catch(error){onError(error.message);}};fields.append(apply);for(const input of controls)if(input.type==='range'||input.tagName==='SELECT')input.onchange=()=>apply.click();
  };
- select.onchange=populate;populate();
+ select.onchange=populate;populate();return schemas;
 }
 let matrixURLs=[];
 export function renderMatrix(container,obj,files,file){

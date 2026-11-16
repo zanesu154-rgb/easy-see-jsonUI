@@ -6,7 +6,7 @@ export function renderIssues(container,issues,onSelect){
  const append=(holder,issue)=>{
   const el=document.createElement('button');
   el.textContent=(issue.severity==='error'?'● ':'○ ')+issue.message+(issue.count>1?'（'+issue.count+' 处）':'');
-  el.className='issue '+issue.severity;el.title=issue.paths?.map(path=>path.join('/')).join('\n')||'';
+  el.className='issue '+issue.severity;const location=issue.paths?.[0]?.slice(-5).join('/');el.title=(location?'…/'+location.slice(-180)+'\n':'')+(issue.count>1?issue.count+' 处，点击定位首处':'点击定位');
   el.onclick=()=>onSelect(issue);holder.append(el);
  };
  for(const issue of issues)if(issue.category!=='container-runtime')append(container,issue);
