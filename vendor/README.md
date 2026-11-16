@@ -5,4 +5,6 @@ Local browser dependencies (no CDN required):
   License: jsonc-parser/LICENSE.md.
 - diff 8.0.2, jsdiff authors, BSD-3-Clause. Only the ESM line diff and its
   dependencies are included. License: diff/LICENSE.
+Vendored text uses LF line endings; incidental trailing spaces are removed.
+
 - JSZip: see jszip.LICENSE.markdown.
