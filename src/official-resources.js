@@ -23,7 +23,7 @@ async function download(path,fetcher) {
 
 export async function loadOfficial(project,{fetcher=fetch,progress=()=>{},index=officialIndex,simulation={},extraTextures=[]}={}) {
   const available=new Set(index.paths),overridden=projectResourcePaths(project),skipped=new Set();
-  const resources=new Map(),failed=[],queue=new Set(['ui/ui_common.json','ui/ui_template_buttons.json','ui/server_form.json']);
+  const resources=new Map(),failed=[],queue=new Set(['ui/_global_variables.json','ui/ui_common.json','ui/ui_template_buttons.json','ui/server_form.json']);
   const addNamespace=ns=>{for(const path of available)if(path.startsWith('ui/')&&(path.endsWith('/'+ns+'.json')||path==='ui/ui_'+ns+'.json'))queue.add(path);};
   const addTexture=value=>{
     if(typeof value!=='string'||!/^textures\/[\w/.-]+$/.test(value))return;
@@ -45,7 +45,7 @@ export async function loadOfficial(project,{fetcher=fetch,progress=()=>{},index=
   walk(simulation);extraTextures.forEach(addTexture);
   const done=new Set();let attempted=0;
   while(true) {
-    for(const path of queue)if(overridden.has(path)||project.has(VANILLA+path)){done.add(path);skipped.add(path);}
+    for(const path of queue)if((overridden.has(path)&&!path.startsWith('ui/'))||project.has(VANILLA+path)){done.add(path);skipped.add(path);}
     const batch=[...queue].filter(path=>!done.has(path)&&available.has(path)).slice(0,Math.min(4,160-attempted));
     if(!batch.length)break;
     attempted+=batch.length;

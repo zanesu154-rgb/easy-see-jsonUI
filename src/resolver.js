@@ -26,6 +26,16 @@ function documents(files){return cached(files,'index',()=>{
  }
  return {docs,index};
 });}
+// Resolve an explicit template without expanding every root in its file.
+export function resolveTemplate(files,file,reference,options={}){
+ if(typeof reference!=='string')return;
+ const ref=reference.split('@').at(-1);if(!/^[\w]+\.[\w]+$/.test(ref))return;
+ const variants=documents(files).index.get(ref)||[],local=unique(variants.filter(v=>pack(v.file)===pack(file))),custom=unique(variants.filter(v=>!isVanilla(v.file))),vanilla=unique(variants.filter(v=>isVanilla(v.file)));
+ const target=local.length===1?local[0]:custom.length===1?custom[0]:custom.length===0&&vanilla.length===1?vanilla[0]:undefined;
+ if(!target)return;
+ const resolved=resolveProject(files,target.file,{...options,rootName:target.name});
+ return {file:target.file,name:target.name,obj:resolved.data[target.name]};
+}
 export function resolveProject(files,file,options){
  if(options?.conditional){const cache=cached(files,'context-templates',()=>new Map()),key=JSON.stringify([file,options.rootName,options.context]);if(!cache.has(key)){if(cache.size>=24)cache.delete(cache.keys().next().value);cache.set(key,build(files,file,options));}return cache.get(key);}
  if(options?.rootName)return cached(files,'resolved-root:'+file+'::'+options.rootName,()=>build(files,file,options));
@@ -44,6 +54,11 @@ export function resolveScene(files,file,simulation={},rootName){
 }
 function build(files,file,{rootName,context={},conditional=false}={}){
  const {docs,index}=documents(files),source=docs.get(file)||parse(decode(files.get(file)||new Uint8Array())).data;
+ // Global palette values are fallback lookups, not copied into every control.
+ const globals=conditional?cached(files,'global-ui-values:'+pack(file),()=>{
+  const entries=[...files].filter(([path])=>path.endsWith('/ui/_global_variables.json')).sort(([a],[b])=>(isVanilla(a)?0:pack(a)===pack(file)?2:1)-(isVanilla(b)?0:pack(b)===pack(file)?2:1));
+  return entries.reduce((scope,[,bytes])=>applyVariables(scope,parse(decode(bytes)).data),{});
+ }):{};
  const issues=[],origins=new Map(),variableTrace=[];let expanded=0;
  function merge(base,obj){
   if(!conditional)return {...base,...obj};
@@ -73,7 +88,8 @@ function build(files,file,{rootName,context={},conditional=false}={}){
   if(!obj||typeof obj!=='object'||Array.isArray(obj))return obj;
   if(depth>64||++expanded>30000){issues.push({message:depth>64?'控件嵌套超过 64 层':'预览展开达到 30000 个控件上限',severity:'error',path});return {};}
   const flat=flatten(name,obj,ns,scope,[],path,originFile),vars=applyVariables(scope,flat.raw,{conditional,trace:variableTrace,path}),result={};
-  const value=v=>{try{return dereference(v,vars);}catch(error){issues.push({message:error.message,severity:'error',path});return v;}};
+  const lookup=conditional?{...globals,...vars}:vars;
+  const value=v=>{try{return dereference(v,lookup);}catch(error){issues.push({message:error.message,severity:'error',path});return v;}};
   for(const [key,v]of Object.entries(flat.raw))if(key!=='controls')result[key]=value(v);
   if(conditional)for(const [key,v]of Object.entries(vars))if(key.startsWith('$'))result[key]=value(v);
   let controls=flat.raw.controls;

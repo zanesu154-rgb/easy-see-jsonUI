@@ -117,6 +117,27 @@ export function binaryFill(length,percent){const filled=Math.max(0,Math.min(leng
 export function stateMatrix(pattern,files,file){
  const width=pattern.end-pattern.start,values=pattern.values;
  if(!values.length)return {states:[],limited:false};
- let product=[''];for(let i=0;i<width;i++){const alphabet=[...new Set(values.map(value=>value[i]))];if(product.length*alphabet.length>128)return {states:values.map(value=>({value,texture:pattern.prefix+value+pattern.suffix,resource:textureResource(files,file,pattern.prefix+value+pattern.suffix)})),limited:true};product=product.flatMap(prefix=>alphabet.map(char=>prefix+char));}
- return {states:product.map(value=>({value,texture:pattern.prefix+value+pattern.suffix,resource:textureResource(files,file,pattern.prefix+value+pattern.suffix)})),limited:false};
+ // Only combine names connected by one changing position. P0/P1 form a
+ // family; the unrelated literal "on" must not contribute o/n to that family.
+ const pending=new Set(values),families=[];
+ while(pending.size){
+  const family=[pending.values().next().value];pending.delete(family[0]);
+  for(let i=0;i<family.length;i++)for(const value of pending){
+   let differences=0;for(let j=0;j<width;j++)if(family[i][j]!==value[j])differences++;
+   if(differences===1){family.push(value);pending.delete(value);}
+  }
+  families.push(family);
+ }
+ const states=new Set();let limited=false;
+ for(const family of families){
+  let product=[''];
+  for(let i=0;i<width;i++){
+   const alphabet=[...new Set(family.map(value=>value[i]))];
+   if(product.length*alphabet.length+states.size>128){limited=true;break;}
+   product=product.flatMap(prefix=>alphabet.map(char=>prefix+char));
+  }
+  if(limited)break;for(const value of product)states.add(value);
+ }
+ const result=limited?values:[...states].sort();
+ return {states:result.map(value=>({value,texture:pattern.prefix+value+pattern.suffix,resource:textureResource(files,file,pattern.prefix+value+pattern.suffix)})),limited};
 }

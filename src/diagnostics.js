@@ -1,10 +1,10 @@
 import {diagnose} from './core.js';
-import {textureResource} from './resources.js';
+import {isVanilla,textureResource} from './resources.js';
 
 export function groupIssues(issues) {
   const groups=new Map();
   for(const issue of issues) {
-    const key=(issue.severity||'warning')+'::'+(issue.code==='bindings'?JSON.stringify(issue.path):issue.message);
+    const key=(issue.category||'')+'::'+(issue.severity||'warning')+'::'+(issue.code==='bindings'?JSON.stringify(issue.path):issue.message);
     if(groups.has(key)){const group=groups.get(key);group.count++;if(issue.path)group.paths.push(issue.path);}
     else groups.set(key,{...issue,count:1,paths:issue.path?[issue.path]:[]});
   }
@@ -28,5 +28,16 @@ export function sceneIssues({parsed,resolved,ns,runtime,files,file,rootName,layo
     }
   }
   issues.push(...resolved.issues.filter(i=>(!rootName||!i.path||i.path[0]===rootName)&&(i.severity==='error'||!i.path||runtime.has(JSON.stringify(i.path))&&!runtime.get(JSON.stringify(i.path))._layoutHidden)));
-  return groupIssues([...issues,...layoutIssues]);
+  const root=runtime.get(JSON.stringify([rootName])),container=root?.$screen_content&&root?.$container_title!==undefined||[...runtime.values()].some(obj=>obj._containerIndex!==undefined);
+  const byId=new Map(ns.map(n=>[n.id,n]));
+  const native=path=>{
+    let node=byId.get(JSON.stringify(path));
+    while(node){
+      const source=node.obj._templateFile||resolved.origins?.get(node.id)?.file;
+      if(source)return isVanilla(source);
+      node=node.parent;
+    }
+    return false;
+  };
+  return groupIssues([...issues,...layoutIssues].map(issue=>container&&issue.severity==='info'&&issue.path&&native(issue.path)?{...issue,category:'container-runtime'}:issue));
 }

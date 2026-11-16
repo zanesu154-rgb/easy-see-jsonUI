@@ -33,7 +33,7 @@ export function layoutScene(ns, rootId, {width,height,form,simulation = {},mode 
   function measure(n,pw,ph,previous,fill) {
     const o=runtime.get(n.id);
     if(!o||o._layoutHidden)return {w:0,h:0};
-    const defaults=o.type==='label'?['default','default']:['panel','screen','collection_panel','input_panel','scroll_view'].includes(o.type)||!n.parent?['100%','100%']:[100,30];
+    const defaults=o.type==='label'?['default','default']:['panel','screen','collection_panel','input_panel','scroll_view','image','button','grid','custom','factory','scroll_track','scrollbar_box'].includes(o.type)||!n.parent?['100%','100%']:[100,30];
     const dims=(Array.isArray(o.size)?o.size:defaults).map(v=>v==='default'&&o.type==='stack_panel'?'100%c':v);
     const content=dims.map(contentDimension),prior=previous.get(n.id)||{w:0,h:0};
     let w=content[0]?prior.w:dims[0]==='fill'?(fill?.axis===0?fill.value:pw):dimension(dims[0],pw,o.type==='label'?0:100);
