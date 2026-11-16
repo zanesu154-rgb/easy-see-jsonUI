@@ -51,3 +51,13 @@ test('clearing any object property preserves leading, trailing and inner comment
   assert.equal(parse(next).data.type,parse(source).data.type);
  }
 });
+
+test('new offset uses existing inline array brackets and separator spacing',()=>{
+ for(const sample of ['[ 18, 18 ]','[18,18]','[18, 18]']){
+  const source=`{\n  "main": {"type":"panel", "size":${sample}}\n}`;
+  const next=editValue(source,['main','offset'],[5,6]);
+  const expected=sample.replace('18','5').replace('18','6');
+  assert.ok(next.includes('"offset": '+expected),next);
+  assert.deepEqual(parse(next).data.main.offset,[5,6]);
+ }
+});

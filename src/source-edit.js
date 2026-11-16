@@ -31,6 +31,23 @@ function formatting(source){
   return {insertSpaces:!indent.includes('\t'),tabSize:indent.includes('\t')?4:indent.length,eol:source.includes('\r\n')?'\r\n':'\n'};
 }
 
+function inlineArrayStyle(tree,source,path,length){
+  const candidates=[];
+  function visit(node){
+    if(node.type==='array'&&node.children.length===length&&node.children.every(c=>!['array','object'].includes(c.type))){
+      const raw=source.slice(node.offset,node.offset+node.length);
+      if(!/[\r\n]/.test(raw)&&!retainedComments(raw)){
+        const children=node.children,lead=source.slice(node.offset+1,children[0]?.offset??node.offset+1),tail=children.length?source.slice(children.at(-1).offset+children.at(-1).length,node.offset+node.length-1):'';
+        const separator=children.length>1?source.slice(children[0].offset+children[0].length,children[1].offset):', ';
+        if(/^\s*$/.test(lead)&&/^\s*$/.test(tail)&&/^,\s*$/.test(separator))candidates.push({lead,tail,separator,sameKey:node.parent?.children?.[0]?.value===path.at(-1)});
+      }
+    }
+    node.children?.forEach(visit);
+  }
+  visit(tree);
+  return candidates.find(c=>c.sameKey)||candidates[0];
+}
+
 function retainedComments(source){
   const scanner=createScanner(source),comments=[];
   for(let token=scanner.scan();token!==SyntaxKind.EOF;token=scanner.scan()){
@@ -77,7 +94,15 @@ export function editValue(source,path,value){
   if(node&&value!==undefined)collect(node,value);
   else if(node)edits.push(...removeProperty(source,node));
   else edits.push(...modify(source.replace(/^\uFEFF/,' '),path,value,{formattingOptions:formatting(source)}));
-  const result=applyEdits(source,edits);
+  let result=applyEdits(source,edits);
+  if(!node&&Array.isArray(value)){
+    const style=inlineArrayStyle(tree,source,path,value.length);
+    if(style){
+      const inserted=findNodeAtLocation(sourceTree(result),path);
+      const compact='['+style.lead+value.map(v=>JSON.stringify(v)).join(style.separator)+style.tail+']';
+      result=applyEdits(result,[{offset:inserted.offset,length:inserted.length,content:compact}]);
+    }
+  }
   sourceTree(result);
   return result;
 }

@@ -21,7 +21,7 @@ try {
  await send('Runtime.enable');
  await send('Emulation.setDeviceMetricsOverride',{width:1600,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});
- await waitFor("document.querySelectorAll('.control').length > 0");
+ await waitFor("document.querySelectorAll('.control').length > 0");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline import regression')}");
  const started=Date.now();await upload('#files',addon);
  await waitFor("document.getElementById('project').textContent.includes('武破')");
@@ -117,7 +117,7 @@ try {
  await evaluate("window.__exports=[];document.getElementById('export').click();document.getElementById('confirmExport').click()");await waitFor('window.__exports.length===1');
  const exportedBase=await evaluate("(async()=>{const b=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',window.__exports[0]);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});return (await JSZip.loadAsync(b)).file('MS_RP/ui/server_form.json').async('string')})()");
  assert.equal(exportedBase,baseSource);
- await evaluate("document.getElementById('apply').click()");assert.equal(await evaluate("document.getElementById('sourceStatus').textContent"),'');
+ await evaluate("document.getElementById('apply').click()");assert.equal(await evaluate("document.getElementById('sourceStatus').textContent"),'已应用');
  await evaluate("document.getElementById('undo').click()");assert.equal(await evaluate("document.getElementById('source').value"),baseSource);
  const invalid=JSON.stringify({namespace:'test',main:{type:'panel',controls:[null],bindings:{}}});
  await evaluate(`document.getElementById('source').value=${JSON.stringify(invalid)};document.getElementById('source').dispatchEvent(new Event('input'));document.getElementById('apply').click()`);

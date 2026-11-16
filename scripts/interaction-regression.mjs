@@ -23,7 +23,7 @@ const result=()=>evaluate("document.getElementById('clickResult').textContent");
 const setMode=mode=>evaluate(`document.getElementById('mode').value='${mode}';document.getElementById('mode').dispatchEvent(new Event('change'))`);
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline interaction regression')}");
  const anchor=o=>({anchor_from:'top_left',anchor_to:'top_left',...o});
  const fixture={namespace:'hit_test',main:anchor({type:'panel',size:[300,180],layer:10,controls:[
@@ -61,6 +61,8 @@ try{
  // Forced branches stay visual-only, and edit drag still carries the complete subtree.
  await setMode('edit');await evaluate("document.getElementById('buttonState').value='pressed';document.getElementById('buttonState').dispatchEvent(new Event('change'));document.getElementById('zoom').value='1';document.getElementById('zoom').dispatchEvent(new Event('change'))");
  assert.equal(await evaluate("document.querySelector('[data-control-name=tip]').hidden"),false);
+ // Editing now intentionally prefers the already selected control.
+ await evaluate("document.querySelector('[data-control-name=movable]').click()");
  const parent=await locate('movable'),child=await locate('moving_child'),from={x:parent.left+35,y:parent.top+25},to={x:from.x+12,y:from.y+15};
  const childLeft=await evaluate("parseFloat(document.querySelector('[data-control-name=moving_child]').style.left)");
  await move(from);await mouse('mousePressed',from,{button:'left',clickCount:1});await move(to);
