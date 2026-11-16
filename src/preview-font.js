@@ -1,11 +1,20 @@
-import {glyphAdvance} from './text-layout.js';
+import {pixelFont} from './pixel-font.js';
+import {glyphAdvance,resetGlyphInk} from './text-layout.js';
 
 export class PreviewFont {
   family='"Microsoft YaHei", sans-serif';
   #glyphs=new Map();#urls=[];#face=null;
   bitmap=char=>this.#glyphs.get(char);
   measure=(char,size)=>{const glyph=this.#glyphs.get(char);return glyph?glyph.advance*size/9:glyphAdvance(char,size);};
-  reset(){this.#urls.forEach(URL.revokeObjectURL);this.#urls=[];this.#glyphs.clear();if(this.#face)document.fonts.delete(this.#face);this.#face=null;this.family='"Microsoft YaHei", sans-serif';}
+  reset(){resetGlyphInk();this.#urls.forEach(URL.revokeObjectURL);this.#urls=[];this.#glyphs.clear();if(this.#face)document.fonts.delete(this.#face);this.#face=null;this.family='"Microsoft YaHei", sans-serif';}
+  async builtin(){const result=await pixelFont();this.reset();this.#glyphs=result.glyphs;this.#urls=[result.url];return '预览字体：内置 ASCII 像素字体；中文使用回退字体';}
+  async fromProject(files,file=''){
+    const root=file.includes('/ui/')?file.slice(0,file.indexOf('/ui/'))+'/':'';
+    const pages=new Map();
+    const entries=[...files].filter(([path])=>/(^|\/)font\/(glyph_[0-9a-f]{2,4}|default8)\.png$/i.test(path)).sort(([a],[b])=>(a.startsWith('__vanilla__/')?0:a.startsWith(root)&&root?2:1)-(b.startsWith('__vanilla__/')?0:b.startsWith(root)&&root?2:1));
+    for(const [path,bytes]of entries){const name=path.split('/').at(-1).replace(/^default8\.png$/i,'glyph_00.png').toLowerCase();pages.set(name,bytes);}
+    return this.loadPages([...pages]);
+  }
   async load(file){
     if(/\.(ttf|otf|woff2?)$/i.test(file.name)){
       const face=new FontFace('EasySeePreviewFont',await file.arrayBuffer());await face.load();
@@ -16,13 +25,16 @@ export class PreviewFont {
     else{
       if(!globalThis.JSZip)throw Error('压缩包组件未加载');
       const zip=await JSZip.loadAsync(file);
-      for(const entry of Object.values(zip.files))if(!entry.dir&&/(^|\/)glyph_[0-9a-f]{2,4}\.png$/i.test(entry.name))entries.push([entry.name,await entry.async('uint8array')]);
+      for(const entry of Object.values(zip.files))if(!entry.dir&&/(^|\/)(glyph_[0-9a-f]{2,4}|default8)\.png$/i.test(entry.name))entries.push([entry.name,await entry.async('uint8array')]);
     }
+    return this.loadPages(entries);
+  }
+  async loadPages(entries){
     if(!entries.length)throw Error('未找到 glyph_XX.png 字体页；也可选择 TTF / OTF / WOFF 字体');
     const glyphs=new Map(),urls=[];
     try{
       for(const [path,bytes]of entries){
-        const page=parseInt(/glyph_([0-9a-f]+)\.png$/i.exec(path)?.[1]||'',16);
+        const page=/(^|\/)default8\.png$/i.test(path)?0:parseInt(/glyph_([0-9a-f]+)\.png$/i.exec(path)?.[1]||'',16);
         if(!Number.isFinite(page)||page>0x10ff)throw Error('字体页文件名无效：'+path);
         const url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));urls.push(url);
         const image=new Image();image.src=url;await image.decode();

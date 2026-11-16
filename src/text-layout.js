@@ -28,7 +28,9 @@ export function layoutText(obj={},maxWidth=Infinity,measure=glyphAdvance){
   return {lines,w:Math.min(limit,Math.max(0,...lines.map(line=>line.width))),h:lines.length*lineHeight,lineHeight};
 }
 
-export function paintGameText(el,obj,textLayout,{family='"Microsoft YaHei", sans-serif',bitmap=()=>null}={}){
+let inkContext;const inkWidths=new Map();
+export function resetGlyphInk(){inkWidths.clear();}
+export function paintGameText(el,obj,textLayout,{family='"Microsoft YaHei", sans-serif',bitmap=()=>null,stretch=false}={}){
   const font=fontMetrics(obj),scale=font.fontSize/9;
   el.style.textAlign=obj.text_alignment||(obj.type==='button'?'center':'left');
   el.style.whiteSpace='pre';
@@ -44,7 +46,14 @@ export function paintGameText(el,obj,textLayout,{family='"Microsoft YaHei", sans
         if(!image.colored){ink.style.backgroundImage='none';Object.assign(ink.style,{backgroundColor:'currentColor',maskImage:`url("${image.url}")`,maskSize:`${image.sheetWidth*pixelScale}px ${image.sheetHeight*pixelScale}px`,maskPosition:`${-(image.x+image.left)*pixelScale}px ${-image.y*pixelScale}px`,maskRepeat:'no-repeat'});}
         const text=document.createElement('span');text.className='glyph-text-alternative';text.textContent=glyph.char;ink.append(text);slot.append(ink);
       }else{
-        slot.textContent=glyph.char;slot.style.fontFamily=family;slot.style.fontSize=8*scale+'px';
+        slot.style.fontFamily=family;slot.style.fontSize=8*scale+'px';
+        if(stretch&&/^[!-~]$/.test(glyph.char)){
+          inkContext??=document.createElement('canvas').getContext('2d');
+          const key=family+'|'+scale+'|'+glyph.char;
+          if(!inkWidths.has(key)){inkContext.font=`${8*scale}px ${family}`;inkWidths.set(key,inkContext.measureText(glyph.char).width);if(inkWidths.size>4096)inkWidths.delete(inkWidths.keys().next().value);}
+          const ink=document.createElement('span');ink.className='stretched-glyph';ink.textContent=glyph.char;
+          ink.style.cssText=`display:inline-block;transform-origin:left center;transform:scaleX(${Math.max(0,glyph.width-scale)/Math.max(.01,inkWidths.get(key))})`;slot.append(ink);
+        }else slot.textContent=glyph.char;
       }
       row.append(slot);
     }

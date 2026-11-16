@@ -14,6 +14,10 @@ export function collectionScope(obj,parent,simulation,form){const collection=obj
 export function instantiateCollections(data,files,file,simulation={},form,{rootName,previewFactory=false}={}){const buttons=formButtons(simulation,form),warnings=[],templates=new Map();let created=0,gridCreated=0;function template(ref){
  if(templates.has(ref))return templates.get(ref);
  const result=resolveTemplate(files,file,ref,simulation.containerTitle!==undefined?{conditional:true,context:simulationVariables(simulation)}:{});
+ if(result){
+  const mark=(obj,path)=>{const out={...obj,_definitionFile:result.origins.get(JSON.stringify(path))?.file||result.file};if(Array.isArray(obj.controls))out.controls=obj.controls.map((entry,i)=>entry&&typeof entry==='object'&&!Array.isArray(entry)?Object.fromEntries(Object.entries(entry).map(([key,child])=>[key,child&&typeof child==='object'&&!Array.isArray(child)?mark(child,[...path,'controls',i,key]):child])):entry);return out;};
+  result.obj=mark(result.obj,[result.name]);
+ }
  templates.set(ref,result);return result;
 }
 function copy(v,generated=false,depth=0,isRoot=false){if(depth>64){warnings.push('集合模板嵌套过深');return {}}if(Array.isArray(v))return v.map(x=>copy(x,generated,depth+1));if(!v||typeof v!=='object')return v;const out={...v};if(generated)out._generated=true;if(Array.isArray(v.controls))out.controls=v.controls.map(entry=>entry&&typeof entry==='object'&&!Array.isArray(entry)?Object.fromEntries(Object.entries(entry).map(([k,x])=>[k,copy(x,generated,depth+1)])):entry);if(v.type==='grid'&&Array.isArray(v.grid_dimensions)&&v.grid_dimensions.length===2){

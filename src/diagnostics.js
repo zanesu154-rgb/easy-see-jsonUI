@@ -33,7 +33,7 @@ export function sceneIssues({parsed,resolved,ns,runtime,files,file,rootName,layo
   const native=path=>{
     let node=byId.get(JSON.stringify(path));
     while(node){
-      const source=node.obj._templateFile||resolved.origins?.get(node.id)?.file;
+      const source=node.obj._definitionFile||node.obj._templateFile||resolved.origins?.get(node.id)?.file;
       if(source)return isVanilla(source);
       node=node.parent;
     }

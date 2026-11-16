@@ -34,7 +34,7 @@ export function resolveTemplate(files,file,reference,options={}){
  const target=local.length===1?local[0]:custom.length===1?custom[0]:custom.length===0&&vanilla.length===1?vanilla[0]:undefined;
  if(!target)return;
  const resolved=resolveProject(files,target.file,{...options,rootName:target.name});
- return {file:target.file,name:target.name,obj:resolved.data[target.name]};
+ return {file:target.file,name:target.name,obj:resolved.data[target.name],origins:resolved.origins};
 }
 export function resolveProject(files,file,options){
  if(options?.conditional){const cache=cached(files,'context-templates',()=>new Map()),key=JSON.stringify([file,options.rootName,options.context]);if(!cache.has(key)){if(cache.size>=24)cache.delete(cache.keys().next().value);cache.set(key,build(files,file,options));}return cache.get(key);}

@@ -1,3 +1,5 @@
+import {Playback} from './playback.js';
+import {Comparison} from './comparison.js';
 import {Presets,validateSimulation} from './presets.js';
 import {renderFields,renderMatrix,buttonComparisons} from './simulation-studio.js';
 import {controlBudget} from './control-budget.js';
@@ -23,6 +25,7 @@ import {stripFormatting} from './text.js';
 import {fontMetrics,FONT_SIZES} from './font.js';
 import {installButtonStates} from './button-states.js';
 import {formButtons,instantiateCollections} from './collections.js';
+import {officialCache} from './official-resources.js';
 import {removeShadowedVanilla,sweepOfficial} from './resource-overrides.js';
 import {loadOfficial,OFFICIAL_REF} from './official-resources.js';
 import {isVanilla,installVanilla,textureResource} from './resources.js';
@@ -42,6 +45,9 @@ const presets=new Presets();
 let sceneInfo=null,currentInstances=null,currentResolved=null;
 let sceneNodes=[],navigationOrigin=null,lastPick=null,homeVisible=false,homeModel=null;
 const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='edit',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
+const comparison=new Comparison($('comparison'));
+const playback=new Playback((time,enabled)=>comparison.frame(time,enabled),()=>renderStageFour());
+
 const text=bytes=>new TextDecoder('utf-8',{ignoreBOM:true}).decode(bytes);const bytes=s=>new TextEncoder().encode(s);
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',5000)}
 function snapshot(){return {files:new Map(files),current,selection,editing:editSession.snapshot(),presets:presets.text()}}function restore(s){files=s.files;current=s.current;selection=s.selection;editSession.restore(s.editing);presets.load(s.presets);render()}function record(){invalidate(files);history.push(snapshot());if(history.length>50)history.shift();future=[]}
@@ -75,7 +81,7 @@ if(project.custom?.length){
 }if(project.templates.length){const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='引用模板（'+project.templates.length+'，非独立界面）';details.append(summary);for(const template of project.templates){const el=button(template.namespace+' · '+template.node.name,()=>{activeForm=null;current=template.file;selection=template.node.id;render()},'tree-item');el.title=template.file;details.append(el)}$('tree').append(details)}appendPhysicalFiles($('tree'),files,project,projectGroups,{current,showOriginal:$('showOriginal').checked,open:(file,id)=>{hideHome();activeForm=null;current=file;selection=id;render();}});}else {const holder=document.createElement('div');holder.id='interfaceContents';$('tree').append(holder);interfaceTree(holder,model,{file:current,selected,ns,openScreen,openRoute,selectControl:selectNode});}
 if(project.forms.length){const heading=document.createElement('div');heading.className='heading';heading.textContent='脚本表单（静态识别）';$('tree').append(heading);for(const form of project.forms){$('tree').append(button('◇ '+(form.displayTitle||stripFormatting(form.title)),()=>showForm(form),'tree-item'));}}
 
-$('screenName').textContent=current||'界面预览';showSource();const scene=draw(ns,instances.warnings);renderSearch();const issues=sceneIssues({parsed,resolved,ns,runtime:scene.runtime,files,file:current,rootName:selected?.path[0],layoutIssues:scene.issues});$('count').textContent=`(${issues.length} 类 / ${issues.reduce((sum,i)=>sum+i.count,0)} 项)`;renderIssues($('issues'),issues,issue=>{if(issue.path)selection=JSON.stringify(issue.path);render()});updateNavigation(project,ns,selected);if(selected)properties(selected);else $('properties').textContent=parsed.error?'当前文件解析失败：'+parsed.error:files.has(current)?'当前文件没有可选控件，可在源码中检查定义。':'导入资源包，或打开示例开始编辑。';renderHome();renderStudio();}
+$('screenName').textContent=current||'界面预览';showSource();const scene=draw(ns,instances.warnings);renderSearch();const issues=sceneIssues({parsed,resolved,ns,runtime:scene.runtime,files,file:current,rootName:selected?.path[0],layoutIssues:scene.issues});$('count').textContent=`(${issues.length} 类 / ${issues.reduce((sum,i)=>sum+i.count,0)} 项)`;renderIssues($('issues'),issues,issue=>{if(issue.path)selection=JSON.stringify(issue.path);render()});updateNavigation(project,ns,selected);if(selected)properties(selected);else $('properties').textContent=parsed.error?'当前文件解析失败：'+parsed.error:files.has(current)?'当前文件没有可选控件，可在源码中检查定义。':'导入资源包，或打开示例开始编辑。';renderHome();renderStudio();renderStageFour();}
 function showSource(){
   const draft=sourceDrafts.read(current,files.has(current)?text(files.get(current)):'');
   $('source').value=draft.text;
@@ -121,6 +127,7 @@ function draw(ns,collectionWarnings=[]) {
       el.style.color=item.color?`rgb(${item.color.slice(0,3).map(c=>Math.round(c*255)).join(',')})`:'';
     }
     updateStats(presentation);
+    if($('animationEnabled').checked&&sceneInfo?.elements===elements)playback.paint();
   };
   for(const n of ns) {
     const o=runtimeNodes.get(n.id),r=scene.rects.get(n.id);if(!r)continue;
@@ -131,7 +138,7 @@ function draw(ns,collectionWarnings=[]) {
     if(o.clips_children===true)el.style.overflow='hidden';
     if(Array.isArray(o.color))el.style.color=`rgb(${o.color.slice(0,3).map(c=>Math.round(c*255)).join(',')})`;
     if(o.type==='label'||o.type==='button') {
-      const label=document.createElement('div');label.className='control-text';paintGameText(label,o,scene.textLayouts.get(n.id),{family:previewFont.family,bitmap:previewFont.bitmap});el.append(label);
+      const label=document.createElement('div');label.className='control-text';paintGameText(label,o,scene.textLayouts.get(n.id),{family:previewFont.family,bitmap:previewFont.bitmap,stretch:$('stretchGlyphs').checked});el.append(label);
       Object.assign(el.style,{display:'flex',alignItems:'center',justifyContent:'center'});
       label.style.textAlign=o.text_alignment||(o.type==='label'?'left':'center');
       if(o.type==='label'){label.style.width='100%';el.style.alignItems='flex-start';}
@@ -187,7 +194,7 @@ function draw(ns,collectionWarnings=[]) {
     const bounds=[...elements].filter(([id,el])=>!el.closest('[hidden]')&&['image','label','button'].includes(runtimeNodes.get(id)?.type)).map(([id])=>scene.rects.get(id));
     if(bounds.length){const left=Math.min(...bounds.map(r=>r.x)),top=Math.min(...bounds.map(r=>r.y)),width=Math.max(...bounds.map(r=>r.x+r.w))-left,height=Math.max(...bounds.map(r=>r.y+r.h))-top,scale=fitScale(Math.max(width,1),Math.max(height,1),$('viewport').clientWidth,$('viewport').clientHeight);canvas.style.transform=`scale(${scale}) translate(${-left}px,${-top}px)`;canvas.dataset.scale=scale;$('stage').style.width=width*scale+'px';$('stage').style.height=height*scale+'px';}
   }
-  sceneInfo={scene,elements,states};return scene;
+  sceneInfo={scene,elements,states,ns};return scene;
 }
 async function unpack(zip,prefix,target,depth=0){if(depth>4)throw Error('嵌套包层数过多');for(const entry of Object.values(zip.files)){if(entry.dir)continue;const name=entry.name.replace(/\\/g,'/');if(name.split('/').includes('..')||name.startsWith('/'))throw Error('包内路径无效');const b=await entry.async('uint8array');if(b.length>100*1024*1024)throw Error('单个文件过大');if(/\.(mcpack|mcaddon)$/i.test(name)){await unpack(await JSZip.loadAsync(b),prefix+name+'/',target,depth+1)}else target.set(prefix+name,b);if(target.size>10000)throw Error('包内文件过多')}}
 async function load(list){try{const next=appendImport?new Map(files):new Map([...files].filter(([p])=>isVanilla(p)));const incoming=new Map();for(const f of list){if(f.size>150*1024*1024)throw Error('第一版支持 150 MB 以下的文件');if(/\.json$/i.test(f.name))incoming.set(f.name,new Uint8Array(await f.arrayBuffer()));else{if(!globalThis.JSZip)throw Error('压缩包组件未加载');await unpack(await JSZip.loadAsync(f),'',incoming)}}const settingsEntries=[...incoming].filter(([path])=>isEditorFile(path)&&path.endsWith('/project.json'));
@@ -305,13 +312,13 @@ function showScript(form){
 }
 $('closeScript').onclick=()=>$('scriptDialog').close();
 $('browseView').onchange=render;
-function hideHome(){homeVisible=false;$('home').hidden=true;$('viewport').hidden=false;$('breadcrumbs').hidden=false;$('screenLinks').hidden=false;}
+function hideHome(){homeVisible=false;$('home').hidden=true;$('viewport').hidden=$('dualPreview').checked;$('comparison').hidden=!$('dualPreview').checked;$('breadcrumbs').hidden=false;$('screenLinks').hidden=false;}
 $('tree').addEventListener('click',event=>{if(event.target.closest('button'))hideHome();},true);
 $('searchResults').addEventListener('click',hideHome,true);
-$('homeButton').onclick=()=>{homeVisible=!homeVisible;if(homeVisible){homeModel=null;renderHome();}else render();};
+$('homeButton').onclick=()=>{homeVisible=!homeVisible;if(homeVisible){playback.pause();comparison.dispose();homeModel=null;renderHome();}else render();};
 function routeSimulation(route){const preset=routePreset(route);return preset?structuredClone(preset):routeMatches(route,route.kind==='container'?simulation.containerTitle:simulation.formTitle)?simulation:route.kind==='container'?{...simulation,containerTitle:route.sample}:{...simulation,formTitle:route.sample,formButtons:[]};}
 function renderHome(){
-  const home=$('home');home.hidden=!homeVisible;$('viewport').hidden=homeVisible;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
+  const home=$('home');home.hidden=!homeVisible;$('viewport').hidden=homeVisible||$('dualPreview').checked;$('comparison').hidden=homeVisible||!$('dualPreview').checked;$('breadcrumbs').hidden=homeVisible;$('screenLinks').hidden=homeVisible;
   if(!homeVisible)return;
   $('properties').replaceChildren();$('properties').textContent='选择一个界面查看属性。';
   $('screenName').textContent='界面总览 · 布局缩略图';
@@ -343,9 +350,9 @@ function renderStudio(){
  if([...select.options].some(option=>option.value===previous))select.value=previous;
  $('loadSavedPreset').disabled=!select.options.length;$('deleteSavedPreset').disabled=!select.options.length;
  const branches=model().routes.filter(r=>r.kind!=='container'&&r.screen.file===current&&r.node.path[0]===root?.path[0]);
- const budget=controlBudget(currentInstances?.data||{},root?.path[0],branches);$('controlBudget').className='budget '+budget.severity;$('controlBudget').textContent=`创建预算：${budget.total} 个控件（含隐藏分支；>1000 黄、>3000 红）`;
+ const budget=controlBudget(currentInstances?.data||{},root?.path[0],branches,{origins:currentResolved?.origins,file:current});$('controlBudget').className='budget '+budget.severity;$('controlBudget').textContent=`创建预算：本包 ${budget.custom} · 原版 ${budget.vanilla} · 合计 ${budget.total}（含隐藏分支；本包 >1000 黄、>3000 红）`;
  if(currentResolved?.issues.some(issue=>issue.message.includes('未找到'))) $('controlBudget').textContent+=' · 有继承未解析，数量为下限';
- $('budgetBranches').replaceChildren();for(const branch of budget.branches){const row=document.createElement('small');row.textContent=branch.label+'：'+branch.count;$('budgetBranches').append(row);}
+ $('budgetBranches').replaceChildren();for(const branch of budget.branches){const row=document.createElement('small');row.textContent=branch.label+'：本包 '+branch.custom+' · 原版 '+branch.vanilla+' · 合计 '+branch.total;$('budgetBranches').append(row);}
  const refreshMatrix=()=>{
   if(!$('matrixDetails').open)return;
   renderMatrix($('textureMatrix'),analysisObject,files,current);
@@ -378,7 +385,7 @@ function inspectScript(form,field){$('properties').replaceChildren();const h=doc
 function followButton(form,index){const jump=form.jumps.find(j=>j.index===index),target=jump&&screens(files).forms.find(f=>f.id===jump.target);if(target)showForm(target);else toast('该按钮的跳转无法静态确定，未执行游戏脚本。');}
 function activateControl(n,ns){let b=n;while(b&&b.obj.type!=='button')b=b.parent;if(!b)return;const item=runtimeNodes.get(b.id);if(item?._containerIndex!==undefined){$('clickResult').textContent='容器格子序号：'+item._containerIndex+' · '+(item._containerItem?.name||'空格');return;}const index=item?._collectionIndex;const buttonId=b.obj.button_mappings?.find(m=>m.from_button_id==='button.menu_select')?.to_button_id||'button.form_button_click';$('clickResult').textContent='点击：'+buttonId+' · 序号：'+(index??'未绑定集合');if(index===undefined){toast('该按钮没有可确定的集合序号。');return}if(activeForm)followButton(activeForm,index);else toast('已记录按钮序号；当前没有关联脚本跳转。');}
 function startDrag(e,n,el,previewMove){
-  if(n.obj._generated||fileProtection().locked||mode!=='edit'||e.button!==0||!at(data().data,n.path))return;
+  if($('animationEnabled').checked||n.obj._generated||fileProtection().locked||mode!=='edit'||e.button!==0||!at(data().data,n.path))return;
   e.stopPropagation();
   const x=e.clientX,y=e.clientY,zoom=Number($('canvas').dataset.scale)||1,old=n.obj.offset||[0,0];
   let dx=0,dy=0,dragging=false;
@@ -396,7 +403,7 @@ function startDrag(e,n,el,previewMove){
     try{editCurrent([...n.path,'offset'],[Math.round((old[0]||0)+dx),Math.round((old[1]||0)+dy)]);selection=n.id;}catch(error){toast(error.message);}render();
   };
 }
-function selectNode(n){selection=n.id;updateNavigation(screens(files),sceneNodes,n);const holder=$('interfaceContents');if(holder){holder.replaceChildren();interfaceTree(holder,model(),{file:current,selected:n,ns:sceneNodes,openScreen,openRoute,selectControl:selectNode});}document.querySelectorAll('[data-node]').forEach(el=>{const active=el.dataset.node===selection&&el.dataset.file===current;el.classList.toggle(el.classList.contains('control')?'selected':'active',active)});$('properties').replaceChildren();properties(n);renderStudio();}
+function selectNode(n){selection=n.id;updateNavigation(screens(files),sceneNodes,n);const holder=$('interfaceContents');if(holder){holder.replaceChildren();interfaceTree(holder,model(),{file:current,selected:n,ns:sceneNodes,openScreen,openRoute,selectControl:selectNode});}document.querySelectorAll('[data-node]').forEach(el=>{const active=el.dataset.node===selection&&el.dataset.file===current;el.classList.toggle(el.classList.contains('control')?'selected':'active',active)});$('properties').replaceChildren();properties(n);renderStudio();if($('dualPreview').checked)renderStageFour();}
 
 $('buttonState').onchange=refreshScene;
 $('mode').onchange=e=>{hideHome();mode=e.target.value;$('buttonState').disabled=mode!=='edit';document.body.dataset.mode=mode;if(activeForm)showForm(activeForm,true);else render()};
@@ -415,7 +422,7 @@ async function loadVanilla(list){try{const archive=new Map();for(const f of list
 $('vanillaFiles').onchange=e=>{if(e.target.files.length)loadVanilla([...e.target.files]);e.target.value=''};$('vanillaDirectory').onchange=e=>loadVanilla([...e.target.files]);
 
 let officialBusy=false,officialAgain=false;
-async function syncOfficial(){if(officialBusy){officialAgain=true;return}officialBusy=true;$('vanilla').disabled=true;$('vanillaStatus').textContent='正在获取官方预览资源…';const project=files;try{const result=await loadOfficial(project,{simulation,extraTextures:[...runtimeNodes.values()].flatMap(o=>[o.texture,o._containerTexture]),progress:p=>{if(files===project)$('vanillaStatus').textContent='官方资源加载中：'+p.done+' 项'}});if(files!==project)return;const swept=sweepOfficial(files,result.resources);invalidate(files);files=swept.files;const available=screens(files).entries;if(!(files.has(current)&&Object.hasOwn(resolveProject(files,current).data||{},JSON.parse(selection||'[]')[0]))&&available.length){current=available[0].file;selection=available[0].node.id}refreshScene();$('vanillaStatus').textContent='官方预览资源：'+result.resources.size+' 项 · 跳过已有 '+result.skipped.length+' 项 · '+OFFICIAL_REF.slice(0,7)+(result.failed.length?' · '+result.failed.length+' 项失败':'')+(result.limited?' · 达到本次下载上限，可再次补齐':'');toast('已补齐可获取的官方资源；完整游戏渲染仍取决于版本和功能支持。')}catch(e){if(files===project){$('vanillaStatus').textContent='官方资源加载失败，可重试或手动导入';toast(e.message)}}finally{officialBusy=false;$('vanilla').disabled=false;if(officialAgain){officialAgain=false;queueMicrotask(()=>syncOfficial())}}}
+async function syncOfficial(){if(officialBusy){officialAgain=true;return}officialBusy=true;$('vanilla').disabled=true;$('vanillaStatus').textContent='正在获取官方预览资源…';const project=files;try{const result=await loadOfficial(project,{simulation,extraTextures:[...runtimeNodes.values()].flatMap(o=>[o.texture,o._containerTexture]),progress:p=>{if(files===project)$('vanillaStatus').textContent='官方资源加载中：'+p.done+' 项'}});if(files!==project)return;const swept=sweepOfficial(files,result.resources);invalidate(files);files=swept.files;const available=screens(files).entries;if(!(files.has(current)&&Object.hasOwn(resolveProject(files,current).data||{},JSON.parse(selection||'[]')[0]))&&available.length){current=available[0].file;selection=available[0].node.id}refreshScene();$('vanillaStatus').textContent='官方预览资源：'+result.resources.size+' 项 · 缓存命中 '+result.cached+' · 新下载 '+result.downloaded+' · 跳过已有 '+result.skipped.length+' 项 · '+OFFICIAL_REF.slice(0,7)+(result.failed.length?' · '+result.failed.length+' 项失败':'')+(result.limited?' · 达到本次下载上限，可再次补齐':'');refreshCacheStatus();toast('已补齐可获取的官方资源；完整游戏渲染仍取决于版本和功能支持。')}catch(e){if(files===project){$('vanillaStatus').textContent='官方资源加载失败，可重试或手动导入';toast(e.message)}}finally{officialBusy=false;$('vanilla').disabled=false;if(officialAgain){officialAgain=false;queueMicrotask(()=>syncOfficial())}}}
 
 $('importSimulation').onclick=()=>$('simulationFile').click();
 $('simulationFile').onchange=async event=>{
@@ -440,3 +447,23 @@ $('fontFile').onchange=async event=>{
   catch(error){toast('字体导入失败：'+error.message);}
   finally{event.target.value='';}
 };
+
+function renderStageFour(){
+ if(!sceneInfo)return;
+ if(homeVisible)playback.pause();
+ const root=sceneInfo.ns.find(n=>n.id===selection)?.path[0]||JSON.parse(selection||'[]')[0];
+ playback.setScene(files,current,sceneInfo,current+'::'+root);
+ if($('dualPreview').checked&&!homeVisible){
+  comparison.render({files,file:current,rootName:root,simulation,form:activeForm,font:previewFont,stretch:$('stretchGlyphs').checked,event:$('animationEvent').value,safe:Number($('safeArea').value)});
+  comparison.frame(playback.time,$('animationEnabled').checked);
+ }else comparison.dispose();
+ $('comparison').hidden=homeVisible||!$('dualPreview').checked;$('viewport').hidden=homeVisible||$('dualPreview').checked;
+}
+$('dualPreview').onchange=()=>{hideHome();renderStageFour();};$('safeArea').oninput=renderStageFour;
+$('stretchGlyphs').onchange=refreshScene;
+$('pixelFont').onclick=async()=>{try{$('fontStatus').textContent=await previewFont.builtin();refreshScene();}catch(error){toast(error.message);}};
+$('packFont').onclick=async()=>{try{$('fontStatus').textContent=await previewFont.fromProject(files,current);refreshScene();}catch(error){toast(error.message);}};
+async function refreshCacheStatus(){const stats=await officialCache.inspect();$('cacheStatus').textContent=stats.available?`本版本原版缓存：${stats.count} 个文件 · ${(stats.bytes/1024/1024).toFixed(2)} MB`:'浏览器未提供持久缓存，将直接下载资源。';}
+$('refreshCache').onclick=refreshCacheStatus;
+$('clearCache').onclick=async()=>{await officialCache.clear();await refreshCacheStatus();toast('已清除本版本下载缓存，当前工程中的预览资源仍可使用。');};
+refreshCacheStatus();

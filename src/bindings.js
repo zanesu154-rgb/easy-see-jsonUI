@@ -6,6 +6,9 @@ import {expression} from './expression.js';
 const containerDefaults = Object.fromEntries([
   '#item_lock_in_inventory','#item_lock_in_slot','#item_lock','#is_selected_slot',
   '#inventory_selected_item_lock_in_inventory','#inventory_selected_item_lock_in_slot',
+  '#stack_splitting_bar_visible','#classic_stack_splitting_overlay_visible','#pocket_stack_splitting_overlay_visible',
+  '#progressive_select_down_visible','#progressive_select_up_visible',
+  '#progressive_select_left_side_visible','#progressive_select_right_side_visible',
   '#gamepad_cursor_visible','#using_gamepad','#is_using_gamepad','#gamepad_helper_visible',
   '#bundle_selected_item_visible','#show_bundle_tooltip_hover','#show_bundle_tooltip_pocket',
   '#show_bundle_item_slot','#item_durability_visible',
