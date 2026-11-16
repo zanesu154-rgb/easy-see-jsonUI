@@ -3,3 +3,12 @@ const files=o=>new Map(Object.entries(o).map(([k,v])=>[k,new TextEncoder().encod
 test('keeps function forms separate, reads icon buttons and static selection jumps',()=>{const f=readForms(files({'scripts/main.js':`function shop(p){const f=new ActionFormData();f.title('商店').body('你好').button('购买','textures/ui/buy');f.show(p).then(r=>{if(r.selection===0) next(p);});}function next(p){const g=new ActionFormData();g.title('下一页');} world.afterEvents.itemUse.subscribe(e=>{if(e.itemStack.typeId==='demo:menu') shop(e.source);});`}));assert.equal(f.length,2);assert.deepEqual(f[0].fields.map(x=>x.text),['商店','你好','购买']);assert.equal(f[0].fields[2].texture,'textures/ui/buy');assert.equal(f[0].jumps[0].target,f[1].id);assert.deepEqual(f[0].items,['demo:menu'])});
 test('scopes textures and refuses ambiguous cross-pack fallbacks',()=>{const f=files({'A/textures/x.png':'a','B/textures/x.png':'b'});assert.equal(texturePath(f,'A/ui/a.json','textures/x'),'A/textures/x.png');assert.equal(texturePath(f,'C/ui/a.json','textures/x'),undefined)});
 test('binds form text and visibility in a preview context',()=>{const o=runtimeObject({text:'#title_text',bindings:[{source_property_name:"(#title_text = 'Other')",target_property_name:'#visible'}]},{title:'Shop',fields:[]});assert.equal(o.text,'Shop');assert.equal(o.visible,false)});
+
+test('dynamic body samples substitute placeholders without exposing JavaScript or altering literals',async()=>{
+ const {fieldSample}=await import('../src/form-titles.js');
+ const forms=readForms(files({'scripts/a.js':'const form=new ActionFormData();form.title("Quest");form.body(`${page.name} · ${sub.title ?? sub.name}`);form.show(player);'}));
+ assert.equal(fieldSample(forms[0].fields.find(field=>field.kind==='body')),'示例 · 示例');
+ const literal=readForms(files({'scripts/a.js':'const form=new ActionFormData();form.title("Quest");form.body("literal ${text}");form.show(player);'}));
+ assert.equal(fieldSample(literal[0].fields.find(field=>field.kind==='body')),'literal ${text}');
+ assert.equal(fieldSample({dynamic:true,text:'${call({x:1})}',parts:['${call({x:1})}']}),'示例');
+});

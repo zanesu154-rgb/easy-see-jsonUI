@@ -1,5 +1,13 @@
 import {stripFormatting} from './text.js';
 
+export function fieldSample(field){
+  if(!field)return '';
+  if(!field.dynamic)return field.text||'';
+  const parts=field.parts;
+  // Unparsed/nested interpolation is never displayed as JavaScript source.
+  return parts?.every(part=>part===null||!String(part).includes('${'))?parts.map(part=>part??'示例').join(''):'示例';
+}
+
 export function staticConstants(source) {
   const values=new Map();
   for(const m of source.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*(['"])((?:\\.|(?!\2).)*)\2\s*(?=[;,\n])/g)) values.set(m[1],m[3].replace(/\\n/g,'\n').replace(/\\(['"\\])/g,'$1'));

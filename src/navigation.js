@@ -1,4 +1,5 @@
-import {nodes} from './core.js';
+import {vanillaRootIndex} from './vanilla-root-index.js';
+import {nodes,parse} from './core.js';
 import {runtimeObject} from './bindings.js';
 import {nameRules} from './name-rules.js';
 import {resolveProject} from './resolver.js';
@@ -6,6 +7,10 @@ import {cached} from './cache.js';
 import {isVanilla} from './resources.js';
 
 export const nodeContains=(parent,child)=>parent.path.every((part,i)=>child.path[i]===part);
+export function screenLabel(screen){
+  const filename=screen.file.split('/').at(-1),namespace=screen.namespace||vanillaRootIndex.files[filename]?.namespace;
+  return (namespace||filename)+' · '+screen.node.name;
+}
 export const titleSample=form=>form.fields.find(f=>f.kind==='title')?.parts?.map(p=>p??'示例').join('')||form.title;
 export function interfaceCategory(screen){
   const name=screen.namespace+' '+screen.node.name+' '+screen.file;
@@ -64,13 +69,14 @@ export function navigationModel(files,project){
     }
   }
   groups.clear();
-  for(const screen of screens){
+  const visibleScreens=screens.filter(screen=>!routes.some(route=>route.definition?.id===screen.id&&route.screen.id!==screen.id));
+  for(const screen of visibleScreens){
     const category=routes.some(route=>route.definition?.id===screen.id)?'表单（server_form）':interfaceCategory(screen);
     if(!groups.has(category))groups.set(category,[]);groups.get(category).push(screen);
   }
   const priority=category=>{const index=['HUD','表单（server_form）','容器与物品栏','聊天'].indexOf(category);return index<0?99:index;};
   const ordered=new Map([...groups].sort(([a],[b])=>priority(a)-priority(b)||a.localeCompare(b)));
-  const result={groups:ordered,routes,screens};models.set(project,result);return result;
+  const result={groups:ordered,routes,screens:visibleScreens};models.set(project,result);return result;
 }
 
 export function routeForTitle(model,title){return model.routes.find(r=>r.kind!=='fallback'&&routeMatches(r,title))||model.routes.find(r=>routeMatches(r,title));}
@@ -79,18 +85,28 @@ export function routeForSelection(model,file,node){
   return model.routes.filter(r=>r.screen.file===file&&nodeContains(r.node,node)).sort((a,b)=>b.node.path.length-a.node.path.length)[0];
 }
 
-export function searchControls(files,query,{includeVanilla=false,limit=100,file,runtime=new Map(),sceneNodes=[]}={}){
-  const index=cached(files,'navigation-search',()=>{
-    const index=[];
-    for(const [file]of files){
-      if(!/\.json$/i.test(file)||!/(^|\/)ui\//.test(file)&&!resolveProject(files,file).data?.namespace)continue;
-      for(const node of nodes(resolveProject(files,file).data)){
+// Source indexes deliberately do not expand inheritance. Resolving every vanilla
+// template recursively can multiply whole control trees and exhaust the tab.
+function searchIndex(files,vanilla){
+  return cached(files,'navigation-search:'+(vanilla?'vanilla':'project'),()=>{
+    const rows=[];let count=0;
+    for(const [file,bytes]of files){
+      if(isVanilla(file)!==vanilla||!/\.json$/i.test(file)||/(^|\/)textures\//.test(file))continue;
+      const data=parse(new TextDecoder().decode(bytes)).data;
+      if(!/(^|\/)ui\//.test(file)&&!data?.namespace)continue;
+      count++;
+      for(const node of nodes(data)){
         const own=Object.fromEntries(Object.entries(node.obj).filter(([key])=>key!=='controls'));
-        index.push({file,node,path:[file,...node.path.filter(p=>p!=='controls'&&typeof p!=='number')].join(' › '),terms:(node.name+' '+JSON.stringify(own)).toLowerCase()});
+        rows.push({file,node,path:[file,...node.path.filter(p=>p!=='controls'&&typeof p!=='number')].join(' › '),terms:(node.name+' '+JSON.stringify(own)).toLowerCase()});
       }
     }
-    return index;
+    return {rows,count};
   });
+}
+
+export function searchControls(files,query,{includeVanilla=false,limit=100,file,runtime=new Map(),sceneNodes=[]}={}){
+  const project=searchIndex(files,false),vanilla=includeVanilla?searchIndex(files,true):{rows:[],count:0};
+  const index=[...project.rows,...vanilla.rows];
   const candidates=new Map(index.map(row=>[row.file+'::'+row.node.id,row]));
   for(const node of sceneNodes){
     const value=runtime.get(node.id);if(!file||!value)continue;
@@ -99,5 +115,5 @@ export function searchControls(files,query,{includeVanilla=false,limit=100,file,
     candidates.set(key,{...(previous||{file,node,path:[file,...node.path.filter(p=>p!=='controls'&&typeof p!=='number')].join(' › ')}),terms});
   }
   const terms=query.toLowerCase().trim().split(/\s+/),all=[...candidates.values()].filter(row=>(includeVanilla||!isVanilla(row.file))&&terms.every(term=>row.terms.includes(term)||row.file.toLowerCase().includes(term)));
-  return {total:all.length,results:all.slice(0,limit)};
+  return {total:all.length,results:all.slice(0,limit),indexed:{project:project.count,vanilla:vanilla.count}};
 }

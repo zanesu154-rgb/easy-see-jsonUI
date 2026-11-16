@@ -43,3 +43,26 @@ test('title conditions without literal samples remain inspectable complex routes
  const model=navigationModel(files,screens(files)),route=model.routes.find(r=>r.node.name==='complex');
  assert.equal(route.kind,'complex');assert.equal(route.sample,undefined);
 });
+
+test('project and vanilla search indexes are isolated, lazy and never expand vanilla inheritance',t=>{
+ const vanilla=new TextEncoder().encode(JSON.stringify({namespace:'vanilla',...Object.fromEntries(Array.from({length:22},(_,i)=>['m'+i,{type:'panel',controls:i<21?[{['left@vanilla.m'+(i+1)]:{}},{['right@vanilla.m'+(i+1)]:{}}]:[]}]))}));
+ const files=new Map([['RP/ui/main.json',bytes({namespace:'custom',main:{type:'panel'}})],['__vanilla__/ui/massive.json',vanilla]]);
+ let decoded=0;const decode=TextDecoder.prototype.decode;t.mock.method(TextDecoder.prototype,'decode',function(value,...args){if(value===vanilla)decoded++;return decode.call(this,value,...args);});
+ const normal=searchControls(files,'m');assert.equal(decoded,0);assert.deepEqual(normal.indexed,{project:1,vanilla:0});assert.ok(normal.results.every(row=>!row.file.startsWith('__vanilla__/')));
+ const all=searchControls(files,'m',{includeVanilla:true});assert.equal(decoded,1);assert.equal(all.indexed.vanilla,1);assert.ok(all.results.some(row=>row.file.startsWith('__vanilla__/')));assert.ok(all.total<100);
+ searchControls(files,'main');searchControls(files,'left',{includeVanilla:true});assert.equal(decoded,1);
+});
+
+test('mounted screen definitions have one interface entry, reachable through their route',()=>{
+ const files=fixture(),path='Other/ui/quest.json',quest=JSON.parse(new TextDecoder().decode(files.get(path)));quest.quest_screen=quest.main;delete quest.main;files.set(path,bytes(quest));
+ const server=JSON.parse(new TextDecoder().decode(files.get('RP/ui/server_form.json')));server.long_form.controls[1]={'quest@quest.quest_screen':{}};files.set('RP/ui/server_form.json',bytes(server));
+ const model=navigationModel(files,screens(files)),route=model.routes.find(r=>r.node.name==='quest@quest.quest_screen');assert.ok(route.definition);
+ assert.equal([...model.groups.values()].flat().some(screen=>screen.id===route.definition.id),false);
+ assert.ok(model.screens.some(screen=>screen.id===route.screen.id));
+});
+
+test('screen labels infer known vanilla namespaces without expanding them',async()=>{
+ const {screenLabel}=await import('../src/navigation.js');
+ assert.equal(screenLabel({namespace:'',file:'RP/ui/chat_screen.json',node:{name:'messages_text/text'}}),'chat · messages_text/text');
+ assert.equal(screenLabel({namespace:'',file:'unknown.json',node:{name:'main'}}),'unknown.json · main');
+});

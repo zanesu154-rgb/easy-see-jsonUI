@@ -21,3 +21,5 @@
 #home{min-height:220px;flex:1;overflow:auto;padding:16px;background:#11161e}#home[hidden],#viewport[hidden]{display:none}#home h3{margin:10px 0;color:#b4c7da}.screen-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.screen-card{min-width:0;display:flex;flex-direction:column;gap:6px;padding:10px;text-align:left}.screen-card canvas{width:100%;height:auto;aspect-ratio:16/9;background:#252c38;image-rendering:pixelated}.screen-card strong{font-size:12px;overflow-wrap:anywhere}.screen-card small{font-size:11px}#homeButton{width:100%;margin-bottom:6px}
 
 .control{user-select:none}
+
+.browser-tools{position:sticky;top:-12px;z-index:5;background:#171c26;padding:12px 0 10px;margin-top:-12px;box-shadow:0 6px 8px #10141c}.browser-tools .heading{margin-top:0}

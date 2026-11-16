@@ -1,10 +1,10 @@
-import {nodeContains} from './navigation.js';
+import {nodeContains,screenLabel} from './navigation.js';
 export function interfaceTree(container,model,{file,selected,ns,openScreen,openRoute,selectControl}){
   for(const [category,screens]of model.groups){
     const group=document.createElement('details');group.open=true;const summary=document.createElement('summary');summary.textContent=category;group.append(summary);
     for(const screen of screens){
       const row=document.createElement('button');row.className='tree-item';row.dataset.screen=screen.id;
-      row.textContent=(screen.namespace==='hud'?'hud · ':'')+screen.node.name;row.title=screen.file;row.onclick=()=>openScreen(screen);group.append(row);
+      row.textContent=screenLabel(screen);row.title=screen.file;row.onclick=()=>openScreen(screen);group.append(row);
       const routes=model.routes.filter(r=>r.screen.id===screen.id);
       for(const route of routes){
         const button=document.createElement('button');button.className='tree-item route';button.dataset.route=route.id;button.textContent=route.label;button.title=screen.file+'\n'+route.expression;button.onclick=()=>openRoute(route);group.append(button);

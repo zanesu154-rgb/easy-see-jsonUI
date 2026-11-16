@@ -78,6 +78,7 @@ try{
  await evaluate(`(()=>{const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(settings.content)}],'easysee-project.json'));const input=document.getElementById('settingsFile');input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);
  await waitFor("document.getElementById('source').readOnly");
  await importText('// 由 tools/build_quest.py 生成，请勿手改\n{"namespace":"safe","main":{"type":"panel","size":[60,40],"offset":[10,20]}}','generated.json');
+ await evaluate("document.getElementById('homeButton').click()");
  assert.equal(await evaluate("document.getElementById('source').readOnly"),true);
  assert.match(await evaluate("document.getElementById('fileProtection').textContent"),/build_quest.py/);
  const protectedRect=await evaluate("(()=>{const r=document.querySelector('.control').getBoundingClientRect();return{x:r.left+10,y:r.top+10};})()");

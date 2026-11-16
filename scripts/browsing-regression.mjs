@@ -1,0 +1,74 @@
+// Browsing fixes with a full vanilla UI archive. Local app :5173, CDP :9222.
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+const [addon,dependency,vanillaArchive]=process.argv.slice(2);
+if(!addon||!dependency||!vanillaArchive)throw Error('Usage: node scripts/browsing-regression.mjs <reference.mcaddon> <server_form.json> <full-vanilla.zip>');
+const target=await(await fetch('http://127.0.0.1:9222/json/new?about:blank',{method:'PUT'})).json();
+const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j;});
+let sequence=0;const pending=new Map(),errors=[];
+ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails);const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(m.error):p.resolve(m.result);}};
+const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
+const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
+const waitFor=async expression=>{for(let i=0;i<80;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+expression);};
+const upload=async(selector,path)=>{const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});await send('DOM.setFileInputFiles',{nodeId,files:[path]});};
+const source=()=>evaluate("document.getElementById('source').value");
+const displayed=value=>value.replace(/\r\n/g,'\n');
+const prop=async(key,value)=>evaluate(`(()=>{const input=[...document.querySelectorAll('#properties label')].find(el=>el.firstChild.textContent===${JSON.stringify(key)})?.querySelector('input');if(!input)throw Error('Missing property');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change'));})()`);
+const select=async name=>evaluate(`(()=>{const button=[...document.querySelectorAll('#tree button')].find(b=>b.textContent===${JSON.stringify(name)});if(!button)throw Error('Missing row');button.click();})()`);
+const importText=async(text,name='safe-edit.json',archive=false)=>{
+ await evaluate(`(async()=>{let content=${JSON.stringify(text)};${archive?"const zip=new JSZip();zip.file('P/ui/test.json',content);zip.file('.easysee/project.json',JSON.stringify({version:1,generatedFiles:{'P/ui/test.json':true}}));content=await zip.generateAsync({type:'uint8array'});":''}const dt=new DataTransfer();dt.items.add(new File([content],${JSON.stringify(name)}));const input=document.getElementById('files');document.getElementById('import').click();input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);
+ await waitFor(`document.getElementById('project').textContent===${JSON.stringify(name)}`);await waitFor("!document.getElementById('vanilla').disabled");
+};
+const review=async()=>{await evaluate("document.getElementById('export').click();document.querySelectorAll('#exportChanges details').forEach(el=>el.open=true)");await new Promise(r=>setTimeout(r,50));return evaluate("({summary:document.getElementById('exportSummary').textContent,changes:document.getElementById('exportChanges').textContent,drafts:document.getElementById('exportDrafts').textContent})");};
+const cancel=()=>evaluate("document.getElementById('cancelExport').click()");
+const beginDownloads=()=>evaluate("window.__downloads=[];HTMLAnchorElement.prototype.click=function(){window.__downloads.push({name:this.download,url:this.href})}");
+const downloadText=async action=>{
+ await beginDownloads();await action();await waitFor('window.__downloads.length===1');
+ return evaluate("(async()=>{const d=window.__downloads[0],content=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',d.url);x.responseType='arraybuffer';x.onload=()=>resolve(new TextDecoder('utf-8',{ignoreBOM:true}).decode(x.response));x.onerror=reject;x.send()});return {...d,content};})()");
+};
+const waitLong=async expression=>{for(let i=0;i<300;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+expression);};
+const bounded=async promise=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Search exceeded 8 seconds')),8000);})]);}finally{clearTimeout(timer);}};
+const search=async term=>bounded(evaluate(`(()=>{const start=performance.now();document.getElementById('search').value=${JSON.stringify(term)};document.getElementById('search').dispatchEvent(new Event('input'));return {term:${JSON.stringify(term)},ms:performance.now()-start,results:document.querySelectorAll('#searchResults .search-result').length,vanilla:[...document.querySelectorAll('#searchResults .search-result')].filter(el=>el.textContent.includes('__vanilla__/')).length};})()`));
+try{
+ await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1700,height:1200,deviceScaleFactor:1,mobile:false});
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await evaluate("window.fetch=async()=>{throw Error('Offline browsing regression')}");
+ await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");
+ await evaluate("(()=>{const input=document.getElementById('vanillaFiles'),handler=input.onchange;input.onchange=event=>{window.__browsingVanilla=event.target.files[0];handler(event);};})()");
+ await upload('#vanillaFiles',vanillaArchive);await waitLong("document.getElementById('vanillaStatus').textContent.startsWith('原版资源：')");
+ const status=await evaluate("document.getElementById('vanillaStatus').textContent");
+ const vanillaUI=await evaluate("(async()=>Object.values((await JSZip.loadAsync(window.__browsingVanilla)).files).filter(entry=>!entry.dir&&entry.name.toLowerCase().endsWith('.json')&&entry.name.split('/').find(part=>['ui','textures','font','texts'].includes(part))==='ui').length)()");
+ assert.ok(Number(/原版资源：(\d+)/.exec(status)[1])>=2000,'Use a full vanilla resource archive, not the small preview ZIP');assert.ok(vanillaUI>=150,'The regression requires a substantial vanilla UI library');
+ assert.ok(await evaluate("!document.getElementById('showOriginal').checked"));
+ const timings=[];
+ for(const term of ['m','ms','m','__vanilla__']){const result=await search(term);assert.ok(result.ms<2000,JSON.stringify(result));assert.equal(result.vanilla,0);timings.push(result);}
+ const vanillaColdMs=await bounded(evaluate("(()=>{const start=performance.now();document.getElementById('showOriginal').checked=true;document.getElementById('showOriginal').dispatchEvent(new Event('change'));return performance.now()-start;})()"));assert.ok(vanillaColdMs<5000);
+ const original=await search('__vanilla__');assert.ok(original.results>0);assert.equal(original.results,original.vanilla);assert.ok(original.ms<2000);timings.push(original);
+ await search('m');await evaluate("document.getElementById('showOriginal').checked=false;document.getElementById('showOriginal').dispatchEvent(new Event('change'))");
+ timings.push(await search('m'));await search('');
+ assert.equal(await evaluate("document.getElementById('home').hidden"),false);
+ assert.equal(await evaluate("document.querySelectorAll('#properties input,#properties h3').length"),0);
+ const roots=await evaluate("[...document.querySelectorAll('#interfaceContents [data-screen]')].map(el=>({id:el.dataset.screen,text:el.textContent}))");
+ assert.ok(!roots.some(row=>/tooltip_mid_/.test(row.text)));
+ for(const name of ['questbook_screen','starmap_screen','martialbook_screen'])assert.ok(!roots.some(row=>row.text.endsWith(' · '+name)),name);
+ assert.ok(await evaluate("[...document.querySelectorAll('.screen-card strong')].some(el=>el.textContent==='chat · messages_text/text')"));
+ await waitLong("document.querySelectorAll('.screen-card[data-route][data-count]').length===4");
+ const cards=await evaluate("[...document.querySelectorAll('.screen-card[data-route]')].map(el=>({title:el.querySelector('strong').textContent,count:Number(el.dataset.count)}))");
+ assert.equal(cards.length,4);assert.ok(new Set(cards.map(card=>card.count)).size>1);
+ const scroll=await evaluate("(()=>{const sidebar=document.querySelector('aside.browser');sidebar.scrollTop=sidebar.scrollHeight;const search=document.getElementById('search').getBoundingClientRect(),panel=sidebar.getBoundingClientRect();return {searchTop:search.top,searchBottom:search.bottom,top:panel.top,bottom:panel.bottom,scrolled:sidebar.scrollTop};})()");
+ assert.ok(scroll.scrolled>100);assert.ok(scroll.searchTop>=scroll.top);assert.ok(scroll.searchBottom<=scroll.bottom);
+ await evaluate("[...document.querySelectorAll('#interfaceContents [data-screen]')].find(el=>el.textContent==='server_form · long_form').click()");
+ const whole=await evaluate("Number(/定义控件 (\\d+)/.exec(document.getElementById('controlStats').textContent)[1])");
+ assert.equal(cards.reduce((sum,card)=>sum+card.count,0)+1,whole);
+ await select('◇ MSQB:…|…');
+ const sample=await evaluate("JSON.parse(document.getElementById('simulation').value)");assert.ok(!sample.formBody.includes('${'));assert.ok(sample.formBody.includes('示例'));
+ assert.ok(await evaluate("document.querySelector('#properties h3')!==null"));
+ await evaluate("document.getElementById('homeButton').click()");assert.equal(await evaluate("document.querySelectorAll('#properties input,#properties h3').length"),0);
+ await evaluate("document.getElementById('homeButton').click()");assert.ok(await evaluate("document.querySelector('#properties h3')!==null"));
+ const reviewState=await review();assert.match(reviewState.summary,/0 个文件变化/);await cancel();
+ await evaluate("document.getElementById('homeButton').click()");
+ const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/easy-see-browsing-fixes.png',Buffer.from(shot.data,'base64'));
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({result:'PASS',status,vanillaUI,vanillaColdMs,timings,cards,whole,scroll,bodySample:sample.formBody,checks:['default search skips vanilla before indexing','vanilla source index is lazy and bounded','repeated single-character search remains responsive','search tools remain visible while scrolling','inherited tooltip templates removed from interface entries','mounted screen definitions are not duplicated','chat namespace restored','branch counts partition the form definition','dynamic body uses samples','overview clears inspector and restores it on return','resource bytes unchanged','no browser exceptions']},null,2));
+}finally{ws.close();await fetch('http://127.0.0.1:9222/json/close/'+target.id);}
