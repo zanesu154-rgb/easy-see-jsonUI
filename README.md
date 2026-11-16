@@ -117,3 +117,8 @@ npm run test:text -- /path/to/reference.mcaddon /path/to/server_form.json /path/
 ```sh
 npm run test:interaction -- /path/to/reference.mcaddon /path/to/server_form.json
 ```
+
+
+## 当前画布的集合按钮统计
+
+集合统计按当前画布实际创建的集合按钮计算，包含预先写好的 `collection_index` 按钮与工厂生成按钮，区分显示和隐藏；绑定同一数据的子图标、文字不重复计数。数据有 34 项不代表当前页面一定创建 34 个按钮，未参与当前布局的分支不计入。切换界面、模拟数据或按钮状态时会刷新统计，缺数据提示也按按钮计数。标准表单回退预览单独显示实际按钮数量。

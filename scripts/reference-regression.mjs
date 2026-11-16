@@ -74,7 +74,8 @@ try {
  assert.match(await evaluate("document.getElementById('screenName').textContent"),/自定义表单/);
  assert.equal(await evaluate("document.querySelectorAll('#canvas .control').length"),135);
  await clickTree('long_form');
- const qb=await evaluate("({stats:document.getElementById('controlStats').textContent,issues:document.getElementById('issues').textContent,nodes:document.querySelectorAll('#canvas .control').length,visibleTips:[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName.startsWith('tip@')&&!el.closest('[hidden]')).length})");
+ const qb=await evaluate("({collectionStats:document.getElementById('collectionStats').textContent,stats:document.getElementById('controlStats').textContent,issues:document.getElementById('issues').textContent,nodes:document.querySelectorAll('#canvas .control').length,visibleTips:[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName.startsWith('tip@')&&!el.closest('[hidden]')).length})");
+ assert.match(qb.collectionStats,/按钮数据 34 项 · 当前集合按钮 [1-9][0-9]* 个/);
  assert.equal(qb.visibleTips,0);assert.ok(qb.nodes<400);assert.ok(!qb.issues.includes('动态绑定需要游戏数据'));assert.ok(!qb.issues.includes('collection_panel'));assert.ok(!qb.issues.includes('offset 应为'));
  const sourceBefore=await evaluate("document.getElementById('source').value");
  const itemSource=await evaluate("(()=>{const e=[...document.querySelectorAll('#canvas .control')].find(e=>e.dataset.controlName==='icon'&&e.style.backgroundImage);e.click();return document.getElementById('properties').textContent})()");
