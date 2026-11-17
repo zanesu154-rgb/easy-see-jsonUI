@@ -8,3 +8,8 @@ Local browser dependencies (no CDN required):
 Vendored text uses LF line endings; incidental trailing spaces are removed.
 
 - JSZip: see jszip.LICENSE.markdown.
+
+- @babel/standalone 7.26.10, Babel authors, MIT. `babel.min.cjs` is the
+  unmodified browser UMD distribution from npm (renamed from babel.min.js so
+  Node regression tests can load the same compiler). Loaded lazily as text,
+  only when script execution is explicitly started. License: babel/LICENSE.

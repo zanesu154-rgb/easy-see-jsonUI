@@ -31,15 +31,18 @@ function copy(v,generated=false,depth=0,isRoot=false){if(depth>64){warnings.push
   }
  }
 }
-if(v.collection_name==='form_buttons'&&v.factory?.control_ids?.button){const target=template(v.factory.control_ids.button),base=target?.obj;if(!base)warnings.push('未找到按钮工厂模板：'+v.factory.control_ids.button);else{out.controls=[...(out.controls||[])];for(const item of buttons){if(created>=500){warnings.push('集合实例数量达到 500 上限');break}created++;out.controls.push({['button_'+item.index]:copy({...base,_templateFile:target.file,collection_index:item.index},true,depth+1)})}}}if(isRoot&&rootName&&previewFactory&&v.factory?.control_ids&&v.collection_name!=='form_buttons'){
+if(v.collection_name==='form_buttons'&&v.factory?.control_ids?.button){const target=template(v.factory.control_ids.button),base=target?.obj;if(!base)warnings.push('未找到按钮工厂模板：'+v.factory.control_ids.button);else{out.controls=[...(out.controls||[])];for(const item of buttons){if(created>=500){warnings.push('集合实例数量达到 500 上限');break}created++;out.controls.push({['button_'+item.index]:copy({...base,_templateFile:target.file,collection_index:item.index},true,depth+1)})}}}const messages=Array.isArray(simulation.chatMessages)&&v.factory?.name==='chat_item_factory'?simulation.chatMessages.slice(-32):undefined;
+if(((isRoot&&rootName&&previewFactory)||messages)&&v.factory?.control_ids&&v.collection_name!=='form_buttons'){
  const entries=Object.entries(v.factory.control_ids);out.controls=[...(out.controls||[])];
  if(entries.length>8)warnings.push('事件工厂只预览前 8 个模板样本');
  for(const [id,ref]of entries.slice(0,8)){
   const target=template(ref);
   if(!target){warnings.push('未找到事件工厂模板：'+ref);continue;}
-  out.controls.push({['preview_'+id]:copy({...target.obj,_templateFile:target.file,_factoryPreview:true},true,depth+1)});
+  if(messages){for(const [index,message]of messages.entries())out.controls.push({['event_'+id+'_'+(message.id??index)]:copy({...target.obj,_templateFile:target.file,_eventContext:{'#text':String(message.text??'')},_eventTick:Number(message.tick)||0},true,depth+1)});}
+  else out.controls.push({['preview_'+id]:copy({...target.obj,_templateFile:target.file,_factoryPreview:true},true,depth+1)});
  }
 }
+
 return out;}return {data:Object.fromEntries(Object.entries(data||{}).map(([k,v])=>[k,!rootName||k===rootName?copy(v,false,0,true):v])),created,gridCreated,warnings};}
 
 export function formButtons(simulation={},form){let entries=buttonCache.get(simulation);if(!entries){entries=new Map();buttonCache.set(simulation,entries)}if(!entries.has(form))entries.set(form,normalizeButtons(simulation,form));return entries.get(form)}

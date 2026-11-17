@@ -38,7 +38,7 @@ export function compileAnimations(files,file,ns,runtime,{event=''}={}){
    }
    if(chain.length>=128)warnings.add('动画链超过 128 段：'+ref);
    if(cycle!==null&&total<=cycle){warnings.add('动画循环总时长为 0：'+ref);cycle=null;}
-   if(chain.length)tracks.push({id:n.id,ref,chain,duration:total,cycle});
+   if(chain.length)tracks.push({id:n.id,startTick:obj._context?._eventTick,ref,chain,duration:total,cycle});
   }
  }
  return {tracks,warnings:[...warnings],events:[...events].sort(),duration:Math.min(600,tracks.length?Math.max(.01,...tracks.map(track=>track.cycle!==null?Math.max(10,track.duration):track.duration)):10)};
@@ -61,7 +61,7 @@ export function sampleTrack(track,time){
 export function animateScene(ns,base,compiled,time){
  const values=new Map(),hidden=new Set();
  for(const track of compiled.tracks){
-  const sampled=sampleTrack(track,time);values.set(track.id,{...values.get(track.id),...sampled});
+  const sampled=sampleTrack(track,track.startTick===undefined?time:Math.max(0,time-track.startTick/20));values.set(track.id,{...values.get(track.id),...sampled});
   if(sampled.destroy){let node=ns.find(n=>n.id===track.id),target=node;while(node){if(node.name.split('@')[0]===sampled.destroy){target=node;break;}node=node.parent;}if(target)hidden.add(target.id);}
  }
  const runtime=new Map(base.runtime),rects=new Map(),shifts=new Map();

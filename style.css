@@ -31,3 +31,22 @@
 #previewStatus[hidden]{display:none}#previewStatus{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 18px;background:#26352f;border-bottom:1px solid #3f6250;color:#bde6cd;font-size:12px}#previewStatus>span{flex:1;min-width:180px}#previewStatus button{padding:5px 8px}.control.missing-data{outline:1px dashed #91a4b9!important;background:#4a596b33!important}.control.missing-data::before{content:attr(data-missing-index);position:absolute;left:2px;top:2px;font:6px/1 monospace;color:#a8bacb;pointer-events:none}
 
 #stateSamples[hidden]{display:none}#stateSamples{padding:8px 18px;background:#192b25;border-bottom:1px solid #3d6150}.sample-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sample-controls strong{font-size:12px;color:#b4eac8}.sample-controls select{max-width:280px;min-width:120px}.sample-controls button,#sampleQuick button{padding:5px 9px}#sampleQuick{display:flex;flex-wrap:wrap;gap:4px}#sampleMode[data-active=true]{color:#f0ce84}#sampleSource{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+
+/* Opt-in script runtime; phase 5b will consolidate the wider editor layout. */
+#scriptRuntime{padding:10px 12px;border-bottom:1px solid var(--line,#303746)}
+#scriptRuntime>details>div{display:grid;gap:8px;padding-top:8px;min-width:0}
+#scriptRuntime select,#scriptRuntime input{width:100%;min-width:0}
+#scriptRuntime small{white-space:normal;overflow-wrap:anywhere}
+#scriptRuntime button{white-space:normal;overflow-wrap:anywhere}
+.script-clock{display:flex;flex-wrap:wrap;gap:5px}
+.script-clock select{max-width:65px}.script-clock output{width:100%;font-size:12px;color:#9caec4}
+#scriptDiagnostics{max-height:260px;overflow:auto;display:grid;gap:4px;font-size:12px}
+#scriptErrors button{color:#ffbc91;text-align:left}
+#viewport{position:relative}
+#scriptFormView:not([hidden]){position:absolute;inset:12px;z-index:2147483000;display:grid;place-items:center;overflow:auto;background:#11182366}
+.runtime-form-card{display:grid;gap:10px;width:min(500px,90%);max-height:100%;overflow:auto;padding:20px;background:#202633;border:1px solid #6b887c;border-radius:8px;box-shadow:0 8px 40px #0008}
+.runtime-form-card h2,.runtime-form-card p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.runtime-form-card label{display:grid;gap:5px}.runtime-form-card input[type=checkbox]{width:auto;justify-self:start}
+.runtime-form-card button{text-align:left;white-space:pre-wrap}
+#scriptOutputs{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}
+#scriptRunStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:#b4c9be;font-size:13px}

@@ -35,7 +35,10 @@ export function runtimeObject(obj, form, simulation = {}, parentContext = {}) {
     '#hud_title_text_string': simulation.title || '',
     '#hud_subtitle_text_string': simulation.subtitle || '',
     '#hud_actionbar_text_string': simulation.actionbar || '',
-    ...simulation.bindings
+    ...simulation.bindings,
+    ...(obj._eventContext||parentContext._eventContext),
+    _eventContext:obj._eventContext||parentContext._eventContext,
+    _eventTick:obj._eventTick??parentContext._eventTick??simulation.runtimeSceneTick
   };
   if (scope.index !== undefined) {
     context['#form_button_text'] = scope.context['#form_button_text'];

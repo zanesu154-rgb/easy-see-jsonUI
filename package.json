@@ -15,6 +15,7 @@
     "test:simulation": "node scripts/simulation-regression.mjs",
     "test:preview": "node scripts/preview-regression.mjs",
     "test:missing-data": "node scripts/missing-data-regression.mjs",
-    "test:states": "node scripts/state-samples-regression.mjs"
+    "test:states": "node scripts/state-samples-regression.mjs",
+    "test:scripts": "node scripts/script-runtime-regression.mjs"
   }
 }
