@@ -33,7 +33,7 @@ const route=async term=>evaluate(`(()=>{const row=[...document.querySelectorAll(
 const downloadBytes=async action=>{await beginDownloads();await action();await waitLong('window.__downloads.length===1');return evaluate("(async()=>{const entry=window.__downloads[0],bytes=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',entry.url);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});window.__stage3Downloaded=bytes;return {name:entry.name,size:bytes.byteLength};})()");};
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1800,height:1250,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline state sample regression')}");
  await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
  await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");

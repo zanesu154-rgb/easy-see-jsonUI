@@ -23,7 +23,7 @@ const result=()=>evaluate("document.getElementById('clickResult').textContent");
 const setMode=mode=>evaluate(`document.getElementById('mode').value='${mode}';document.getElementById('mode').dispatchEvent(new Event('change'))`);
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline interaction regression')}");
  const anchor=o=>({anchor_from:'top_left',anchor_to:'top_left',...o});
  const fixture={namespace:'hit_test',main:anchor({type:'panel',size:[300,180],layer:10,controls:[

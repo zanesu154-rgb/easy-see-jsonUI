@@ -35,3 +35,9 @@ test('malformed control and binding structures remain diagnosable without crashi
 test('valid JSON with a non-object document root is diagnosed as invalid UI',()=>{
  for(const data of [null,[],42,'text'])assert.equal(sceneIssues({parsed:{data},resolved:{data:{},issues:[]},ns:[],runtime:new Map(),files:new Map(),file:'a.json'} )[0].message,'JSON UI 顶层必须为对象。');
 });
+
+test('native HUD runtime hints fold separately from actionable package diagnostics outside containers',()=>{
+ const data={main:{type:'panel',controls:[{native:{type:'label',text:'#native',_definitionFile:'__vanilla__/ui/hud.json',bindings:[{binding_name:'#native'}]}},{custom:{type:'label',text:'#custom',bindings:[{binding_name:'#custom'}]}}]}},ns=nodes(data),scene=layoutScene(ns,'["main"]',{width:640,height:360});
+ const issues=sceneIssues({parsed:{data},resolved:{data,issues:[]},ns,runtime:scene.runtime,files:new Map(),file:'P/ui/hud.json',rootName:'main'});
+ assert.equal(issues.length,2);assert.equal(issues.find(issue=>issue.message.includes('#native')).category,'vanilla-runtime');assert.equal(issues.find(issue=>issue.message.includes('#custom')).category,undefined);
+});

@@ -21,7 +21,7 @@ try {
  await send('Runtime.enable');
  await send('Emulation.setDeviceMetricsOverride',{width:1600,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});
- await waitFor("document.querySelectorAll('.control').length > 0");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
+ await waitFor("document.querySelectorAll('.control').length > 0");await evaluate("document.getElementById('editMode').click()");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline import regression')}");
  const started=Date.now();await upload('#files',addon);
  await waitFor("document.getElementById('project').textContent.includes('武破')");

@@ -18,7 +18,7 @@ const select=async text=>evaluate(`(()=>{const row=[...document.querySelectorAll
 const screenshot=async name=>{const r=await send('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/easy-see-'+name+'.png',Buffer.from(r.data,'base64'));};
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1600,height:1100,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline text regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");
  if(dependency){await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");}

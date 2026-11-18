@@ -33,7 +33,7 @@ const route=async term=>evaluate(`(()=>{const row=[...document.querySelectorAll(
 const downloadBytes=async action=>{await beginDownloads();await action();await waitLong('window.__downloads.length===1');return evaluate("(async()=>{const entry=window.__downloads[0],bytes=await new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',entry.url);x.responseType='arraybuffer';x.onload=()=>resolve(x.response);x.onerror=reject;x.send()});window.__stage3Downloaded=bytes;return {name:entry.name,size:bytes.byteLength};})()");};
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1700,height:1200,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline simulation regression')}");
  await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
  await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");
@@ -60,7 +60,7 @@ try{
  const quest={formTitle:'MSQB:realm/kai|开阳',formBody:'第三阶段回归',formButtons:Array.from({length:34},(_,i)=>({text:i<3?'P0分页':i<10?'S0小页':'QX',texture:''}))};quest.formButtons[10]={text:'QCD02节点\n说明',texture:'textures/items/kai_trial'};
  await evaluate(`(()=>{const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(quest))}],'sim_qb.json'));const input=document.getElementById('simulationFile');input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);
  await waitLong("[...document.getElementById('savedPresets').options].some(option=>option.textContent.startsWith('sim_qb'))");await route('MSQB:');
- await evaluate("document.getElementById('matrixDetails').open=true");await waitLong("document.querySelectorAll('#textureMatrix select option').length>0");
+ await evaluate("document.getElementById('inspectMatrix').click()");await waitLong("document.querySelectorAll('#textureMatrix select option').length>0");
  await evaluate("(()=>{const select=document.querySelector('#textureMatrix select'),option=[...select.options].find(option=>option.textContent.startsWith('textures/ui/questbook/n_'));if(!option)throw Error('Missing node pattern');select.value=option.value;select.dispatchEvent(new Event('change'));})()");
  assert.equal(await evaluate("document.querySelectorAll('#textureMatrix .matrix-cell').length"),12);assert.equal(await evaluate("document.querySelectorAll('#textureMatrix .matrix-cell.missing').length"),0);
  for(const prefix of ['tab_','subtab_']){

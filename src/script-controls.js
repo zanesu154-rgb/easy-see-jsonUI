@@ -2,13 +2,14 @@ import {scriptProject,actionCandidates} from './script-project.js';
 import {ScriptSandbox} from './script-sandbox.js';
 import {stripFormatting} from './text.js';
 const el=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;};
+export function scriptLocation(record){const match=/easysee-pack:\/\/\/([^\s)]+?):(\d+):(\d+)/.exec(record.stack||'');const file=match?decodeURI(match[1]):record.file;return file?{file,line:match?Math.max(1,Number(match[2])-2):record.line||1}:null;}
 export class ScriptControls{
  constructor(container,{onOutput,onStop,onStart,onSource,statusBar}){
   this.container=container;this.statusBar=statusBar;this.onOutput=onOutput;this.onStop=onStop;this.onStart=onStart;this.onSource=onSource;this.project=null;this.busy=false;this.running=false;this.initialized=false;this.playing=false;this.snapshot=null;this.lastAction=null;
   this.sandbox=new ScriptSandbox(message=>this.receive(message));this.build();
  }
  build(){
-  const details=el('details');details.open=true;details.append(el('summary','脚本运行 · 5a'));this.container.append(details);this.body=el('div');details.append(this.body);
+  const details=el('details');details.open=true;details.append(el('summary','脚本动作'));this.container.append(details);this.body=el('div');details.append(this.body);
   this.body.append(el('small','主动启动后，脚本在本机隔离环境中运行。世界逻辑近似。停止后恢复此前预览；脚本状态暂不保存。'));
   this.pack=el('select');this.pack.id='scriptPack';this.pack.setAttribute('aria-label','行为包脚本入口');this.body.append(this.pack);
   const controls=el('div');this.start=el('button','启动脚本');this.start.id='startScripts';this.start.onclick=()=>this.boot();this.stopButton=el('button','停止');this.stopButton.id='stopScripts';this.stopButton.onclick=()=>this.stop();controls.append(this.start,this.stopButton);this.body.append(controls);
@@ -30,11 +31,11 @@ export class ScriptControls{
   const project=scriptProject(files);
   // Map identity alone changes during vanilla downloads; compare source text to avoid stopping unnecessarily.
   const changed=reset||!this.project||JSON.stringify(this.project.sources)!==JSON.stringify(project.sources)||JSON.stringify(this.project.packs)!==JSON.stringify(project.packs);
-  if(changed){this.stop();const previous=this.pack.value;this.project=project;this.pack.replaceChildren();for(const p of project.packs){const option=el('option',p.name+' · '+p.entry+(p.missing?'（入口缺失）':''));option.value=p.entry;option.disabled=p.missing;this.pack.append(option);}if(project.packs.some(p=>p.entry===previous&&!p.missing))this.pack.value=previous;else this.pack.value=project.packs.find(p=>!p.missing)?.entry||'';this.status.textContent='尚未启动';this.snapshot=null;this.lastError=null;this.scriptId.value='';this.scriptMessage.value='';this.outputText.textContent='';this.actions.replaceChildren();this.errorBar.replaceChildren();this.issueList.replaceChildren();}
+  if(changed){this.stop();const previous=this.pack.value;this.project=project;this.pack.replaceChildren();for(const p of project.packs){const option=el('option',p.name+' · '+p.entry+(p.missing?'（入口缺失）':''));option.value=p.entry;option.disabled=p.missing;this.pack.append(option);}if(project.packs.some(p=>p.entry===previous&&!p.missing))this.pack.value=previous;else this.pack.value=project.packs.find(p=>!p.missing)?.entry||'';this.status.textContent='尚未启动';this.snapshot=null;this.lastError=null;this.scriptId.value='';this.scriptMessage.value='';this.outputText.textContent='';this.actions.replaceChildren();this.candidates=null;this.errorBar.replaceChildren();this.issueList.replaceChildren();}
   this.container.hidden=!project.packs.length;this.update();
  }
  async boot(){
-  if(!this.project||!this.pack.value)return;this.stop();this.onStart?.();this.running=true;this.initialized=false;this.busy=true;this.snapshot=null;this.actions.replaceChildren();this.status.textContent='正在加载脚本模块…';this.lastError=null;this.errorBar.replaceChildren();this.issueList.replaceChildren();this.update();
+  if(!this.project||!this.pack.value)return;this.stop();this.onStart?.();this.running=true;this.initialized=false;this.busy=true;this.snapshot=null;this.actions.replaceChildren();this.candidates=null;this.status.textContent='正在加载脚本模块…';this.lastError=null;this.errorBar.replaceChildren();this.issueList.replaceChildren();this.update();
   try{await this.sandbox.start(this.project,this.pack.value);}catch(error){if(this.running)this.receive({type:'fatal',message:error.message});}
  }
  stop(){const wasRunning=this.running;this.playing=false;this.running=false;this.busy=false;this.sandbox.stop();if(wasRunning){this.status.textContent='已停止';this.onStop?.();}this.update();}
@@ -43,13 +44,13 @@ export class ScriptControls{
  respond(response){if(!this.snapshot?.form||this.busy)return;this.send({type:'respond',response:{id:this.snapshot.form.id,...response}});}
  receive(message){
   if(message.type==='progress'){this.status.textContent='加载：'+message.file;return;}
-  if(message.type==='fatal'){this.stop();this.status.textContent=message.message;return;}
+  if(message.type==='fatal'){this.lastError=message;this.stop();this.status.textContent=message.message;this.update();return;}
   if(message.type==='error'){this.lastError=message;this.update();this.errorBar.replaceChildren();const button=el('button',message.message);button.onclick=()=>this.openError(message);this.errorBar.append(button);return;}
   if(['form','formClosed','hud'].includes(message.type)){if(message.type==='form'&&this.snapshot){this.snapshot.form=message.form;this.update();}if(message.type==='formClosed'&&this.snapshot?.form?.id===message.id){this.snapshot.form=null;this.update();}if(message.type==='hud')this.renderOutput(message);this.onOutput?.(message);return;}
   if(!['snapshot','failed'].includes(message.type))return;
   this.busy=false;if(message.operation==='start')this.initialized=message.type==='snapshot';this.snapshot=message;this.renderOutput(message.hud);
   if(message.type==='failed'){this.playing=false;this.status.textContent=message.operation==='start'?'脚本入口加载失败；点击错误定位，修复后重启':'脚本操作失败；查看运行信息，可停止后重启';}else this.status.textContent='已加载 '+message.loaded.length+' 个模块 · '+message.unsupported.length+' 种未模拟 API';
-  const previous=this.actions.selectedOptions[0]?.textContent;this.candidates=actionCandidates(this.project,message.loaded,message.events);this.actions.replaceChildren();for(const [index,action]of this.candidates.entries()){const option=el('option',action.label+(action.phase==='before'?'（使用前）':''));option.value=index;this.actions.append(option);if(option.textContent===previous)this.actions.value=String(index);}
+  const previous=this.actions.selectedOptions[0]?.textContent,candidates=actionCandidates(this.project,message.loaded,message.events),changed=JSON.stringify(candidates)!==JSON.stringify(this.candidates);this.candidates=candidates;if(changed){this.actions.replaceChildren();for(const [index,action]of this.candidates.entries()){const option=el('option',action.label+(action.phase==='before'?'（使用前）':''));option.value=index;this.actions.append(option);if(option.textContent===previous)this.actions.value=String(index);}}
   this.syncEventFields();this.issueList.replaceChildren();
   for(const issue of message.unsupported.slice(0,100)){const button=el('button',issue.count+' 次 · '+issue.api);button.onclick=()=>this.openError(issue);this.issueList.append(button);}
   for(const row of message.logs.filter(row=>row.level==='warn'||row.level==='error').slice(-15)){const button=el('button',stripFormatting(row.text));button.onclick=()=>this.openError({stack:row.text});this.issueList.append(button);}
@@ -57,12 +58,13 @@ export class ScriptControls{
  }
  renderOutput(hud){if(!hud)return;const text=['标题：'+stripFormatting(hud.title||''),'副标题：'+stripFormatting(hud.subtitle||''),'动作栏：'+stripFormatting(hud.actionbar||''),...(hud.messages||[]).map(row=>'['+row.tick+'] '+stripFormatting(row.text))].join('\n');if(this.outputText.textContent!==text)this.outputText.textContent=text;}
  syncEventFields(){const scriptEvent=this.candidates?.[Number(this.actions.value)]?.event==='scriptEventReceive';this.scriptId.hidden=!scriptEvent;this.scriptMessage.hidden=!scriptEvent;}
- openError(record){const match=/easysee-pack:\/\/\/([^\s)]+?):(\d+):(\d+)/.exec(record.stack||'');const file=match?decodeURI(match[1]):record.file;if(file)this.onSource?.({file,line:match?Math.max(1,Number(match[2])-2):record.line||1});}
+ openError(record){const location=scriptLocation(record);if(location)this.onSource?.(location);}
  update(){
   this.start.disabled=this.busy||!this.pack.value;this.start.textContent=this.running?'重置并重启':'启动脚本';this.stopButton.disabled=!this.running;this.triggerButton.disabled=!this.running||!this.initialized||this.busy||!this.actions.options.length;
   for(const button of [this.play,this.step,this.forward])button.disabled=!this.running||!this.initialized||this.busy;
   this.play.textContent=this.playing?'暂停':'播放';this.close.disabled=!this.running||this.busy||!this.snapshot?.form;
-  if(this.statusBar){this.statusBar.hidden=!this.running&&!this.lastError;this.statusBar.replaceChildren(el('span',this.running?'脚本 '+(this.playing?'播放':'暂停')+' · '+(this.snapshot?.tick||0)+' tick · '+(this.snapshot?.unsupported?.length||0)+' 种未模拟 API':''));if(this.lastError){const button=el('button',this.lastError.message);button.onclick=()=>this.openError(this.lastError);this.statusBar.append(button);}}
+  if(this.statusBar){this.statusBar.hidden=!this.running&&!this.lastError;this.statusBar.replaceChildren(el('span',this.running?'脚本 '+(this.playing?'播放':'暂停')+' · '+(this.snapshot?.tick||0)+' tick · '+(this.snapshot?.unsupported?.length||0)+' 种未模拟 API':''));if(this.lastError){const location=scriptLocation(this.lastError),node=el(location?'button':'span',(location?location.file.split('/').at(-1)+':'+location.line+' · ':'')+this.lastError.message);node.title=(location?location.file+':'+location.line+' · ':'')+this.lastError.message;if(location)node.onclick=()=>this.openError(this.lastError);this.statusBar.append(node);}}
+  this.onState?.();
   this.clock.textContent=(this.snapshot?.tick||0)+' tick · '+((this.snapshot?.tick||0)/20).toFixed(2)+' 秒';
  }
 }

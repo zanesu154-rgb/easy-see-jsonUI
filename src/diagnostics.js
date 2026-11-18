@@ -39,5 +39,5 @@ export function sceneIssues({parsed,resolved,ns,runtime,files,file,rootName,layo
     }
     return false;
   };
-  return groupIssues([...issues,...layoutIssues].map(issue=>container&&issue.severity==='info'&&issue.path&&native(issue.path)?{...issue,category:'container-runtime'}:issue));
+  return groupIssues([...issues,...layoutIssues].map(issue=>container&&issue.severity==='info'&&issue.path&&native(issue.path)?{...issue,category:'container-runtime'}:issue.severity==='info'&&issue.path&&native(issue.path)?{...issue,category:'vanilla-runtime'}:issue));
 }

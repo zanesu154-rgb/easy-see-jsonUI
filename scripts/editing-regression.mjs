@@ -28,7 +28,7 @@ const downloadText=async action=>{
 };
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1600,height:1100,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline safe edit regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
  await select('hud · ms_status_panel');const original=await source();assert.ok(original.includes('//'));

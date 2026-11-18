@@ -33,7 +33,7 @@ const drag=async(p,dx,dy)=>{await send('Input.dispatchMouseEvent',{type:'mousePr
 const route=async term=>evaluate(`(()=>{const button=[...document.querySelectorAll('#tree [data-route]')].find(el=>el.textContent.includes(${JSON.stringify(term)}));if(!button)throw Error('Missing route '+${JSON.stringify(term)});button.click();})()`);
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1700,height:1200,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline navigation regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
  assert.equal(await evaluate("!document.getElementById('home').hidden&&document.querySelectorAll('.screen-card').length>0"),true);

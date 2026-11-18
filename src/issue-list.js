@@ -2,17 +2,17 @@
 export function renderIssues(container,issues,onSelect){
  container.replaceChildren();
  if(!issues.length){container.textContent='✓ 未发现已知问题；实际游戏效果仍需在基岩版验证。';return;}
- const native=issues.filter(issue=>issue.category==='container-runtime');
+ const native=issues.filter(issue=>['container-runtime','vanilla-runtime'].includes(issue.category));
  const append=(holder,issue)=>{
   const el=document.createElement('button');
   el.textContent=(issue.severity==='error'?'● ':'○ ')+issue.message+(issue.count>1?'（'+issue.count+' 处）':'');
   el.className='issue '+issue.severity;const location=issue.paths?.[0]?.slice(-5).join('/');el.title=(location?'…/'+location.slice(-180)+'\n':'')+(issue.count>1?issue.count+' 处，点击定位首处':'点击定位');
   el.onclick=()=>onSelect(issue);holder.append(el);
  };
- for(const issue of issues)if(issue.category!=='container-runtime')append(container,issue);
+ for(const issue of issues)if(!['container-runtime','vanilla-runtime'].includes(issue.category))append(container,issue);
  if(native.length){
-  const details=document.createElement('details');details.id='containerRuntimeIssues';
-  const summary=document.createElement('summary');summary.textContent=`原版容器运行时提示（${native.length} 类 / ${native.reduce((sum,issue)=>sum+issue.count,0)} 项，点击展开）`;
+  const details=document.createElement('details');details.id=native.some(issue=>issue.category==='container-runtime')?'containerRuntimeIssues':'vanillaRuntimeIssues';
+  const summary=document.createElement('summary');summary.textContent=`${native.every(issue=>issue.category==='container-runtime')?'原版容器':'原版'}运行时提示（${native.length} 类 / ${native.reduce((sum,issue)=>sum+issue.count,0)} 项，点击展开）`;
   details.append(summary);for(const issue of native)append(details,issue);container.append(details);
  }
 }

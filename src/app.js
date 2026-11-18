@@ -1,3 +1,4 @@
+import {EditorShell} from './editor-shell.js';
 import {scriptHudScreen} from './script-output.js';
 import {ScriptControls,renderRuntimeForm} from './script-controls.js';
 import {sampleCatalog} from './state-samples.js';
@@ -49,36 +50,43 @@ const sourceApplications=new Map();
 const routePresets=new Map();
 const presets=new Presets();
 let sceneInfo=null,currentInstances=null,currentResolved=null,previewSceneKey='';
-let sceneNodes=[],navigationOrigin=null,lastPick=null,homeVisible=false,homeModel=null;
-const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='edit',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
+let sceneNodes=[],navigationOrigin=null,lastPick=null,homeVisible=false,homeModel=null,sidebarModel=null,lastIssues=[];
+const $=id=>document.getElementById(id);let files=new Map(),current='',selection='',history=[],future=[],urls=[],expanded=new Set(),mode='preview',activeForm=null,simulation={},runtimeNodes=new Map(),appendImport=false;
+const shell=new EditorShell({onMode:workspaceModeChanged,onInspect:()=>renderStudio()});
 let applyingSample=false;
 const stateSamples=new StateSampleControls($('stateSamples'),{onApply:(value,options)=>{applyingSample=true;try{applySimulation(value);if(options.restoreDraft!==undefined)$('simulation').value=options.restoreDraft;}finally{applyingSample=false;}},onError:toast,getDraft:()=>$('simulation').value});
 let runtimeForm=null,runtimeHud=null,runtimeBase=null,runtimePending=false,runtimeDisplayKey='',runtimeTick=0,runtimeVisualKey='',runtimeSceneTick=0;
 const scriptRuntime=new ScriptControls($('scriptRuntime'),{
  onOutput:receiveScriptOutput,onSource:showScript,statusBar:$('scriptRunStatus'),
  onStart:()=>{runtimeBase={simulation:structuredClone(simulation),mode,activeForm,current,selection,homeVisible,navigationOrigin,draft:$('simulation').value,animation:$('animationEnabled').checked,dual:$('dualPreview').checked};playback.pause();$('dualPreview').checked=false;runtimeTick=0;runtimeVisualKey='';runtimeSceneTick=0;runtimeDisplayKey='';},
- onStop:()=>{runtimeForm=null;runtimeHud=null;runtimeDisplayKey='';renderRuntimeForm($('scriptFormView'),null);if(runtimeBase){simulation=runtimeBase.simulation;mode=runtimeBase.mode;activeForm=runtimeBase.activeForm;if(files.has(runtimeBase.current)){current=runtimeBase.current;selection=runtimeBase.selection;homeVisible=runtimeBase.homeVisible;navigationOrigin=runtimeBase.navigationOrigin;}const draft=runtimeBase.draft;playback.releaseScript();$('animationEnabled').checked=runtimeBase.animation;$('dualPreview').checked=runtimeBase.dual;runtimeBase=null;$('mode').value=mode;document.body.dataset.mode=mode;syncSimulation();$('simulation').value=draft;render();}}
+ onStop:()=>{runtimeForm=null;runtimeHud=null;runtimeDisplayKey='';renderRuntimeForm($('scriptFormView'),null);if(runtimeBase){simulation=runtimeBase.simulation;mode=shell.mode==='edit'?'edit':'preview';activeForm=runtimeBase.activeForm;if(files.has(runtimeBase.current)){current=runtimeBase.current;selection=runtimeBase.selection;homeVisible=runtimeBase.homeVisible;navigationOrigin=runtimeBase.navigationOrigin;}const draft=runtimeBase.draft;playback.releaseScript();$('animationEnabled').checked=runtimeBase.animation;$('dualPreview').checked=runtimeBase.dual;runtimeBase=null;$('mode').value=mode;document.body.dataset.mode=mode;syncSimulation();$('simulation').value=draft;render();}}
 });
+shell.attachRuntime(scriptRuntime);
+function workspaceModeChanged(next){
+ mode=next==='edit'?'edit':'preview';$('mode').value=mode;$('buttonState').disabled=mode!=='edit';document.body.dataset.mode=mode;
+ if(scriptRuntime.running&&next==='edit'){scriptRuntime.playing=false;scriptRuntime.update();playback.releaseScript();$('animationEnabled').checked=false;}
+ render();if(scriptRuntime.running&&next==='view')playback.followScript(runtimeTick/20);
+}
 function receiveScriptOutput(message){
  if(message.type==='form')runtimeForm=message.form;
  if(message.type==='formClosed')runtimeForm=null;
  if(message.type==='hud')runtimeHud={title:message.title,subtitle:message.subtitle,actionbar:message.actionbar,messages:message.messages};
  if(message.type==='snapshot'){runtimeForm=message.form;runtimeHud=message.hud;runtimeTick=message.tick;}
- if(runtimePending)return;runtimePending=true;requestAnimationFrame(()=>{runtimePending=false;if(scriptRuntime.running){paintScriptOutput();if(!homeVisible)playback.followScript(runtimeTick/20);}});
+ if(runtimePending)return;runtimePending=true;requestAnimationFrame(()=>{runtimePending=false;if(scriptRuntime.running){paintScriptOutput();if(!homeVisible&&shell.mode==='view')playback.followScript(runtimeTick/20);}});
 }
 function paintScriptOutput(){
  const key=JSON.stringify([runtimeForm,runtimeHud]);if(key===runtimeDisplayKey)return;runtimeDisplayKey=key;
- mode='preview';$('mode').value=mode;document.body.dataset.mode=mode;activeForm=null;homeVisible=false;
+ mode=shell.mode==='edit'?'edit':'preview';$('mode').value=mode;document.body.dataset.mode=mode;activeForm=null;homeVisible=false;
  const bindings={...simulation.bindings};for(const name of ['#title_text','#body_text','#form_text','#text','#hud_title_text_string','#hud_subtitle_text_string','#hud_actionbar_text_string'])delete bindings[name];
  simulation={...simulation,bindings,title:runtimeHud?.title||'',subtitle:runtimeHud?.subtitle||'',actionbar:runtimeHud?.actionbar||'',formTitle:runtimeForm?.title||'',formBody:runtimeForm?.body||'',formButtons:runtimeForm?.buttons||[],chatMessages:runtimeHud?.messages||[]};
  const route=runtimeForm?.kind==='action'&&routeForTitle(model(),runtimeForm.title);
- if(route){current=route.screen.file;selection=route.node.id;navigationOrigin=null;}
+ if(route){const selectedPath=JSON.parse(selection||'[]');if(current!==route.screen.file||!route.node.path.every((part,index)=>selectedPath[index]===part))selection=route.node.id;current=route.screen.file;navigationOrigin=null;}
  else if(!runtimeForm){const last=runtimeHud?.messages?.at(-1)?.text||'';if(last)simulation.bindings['#text']=last;const project=screens(files),target=scriptHudScreen(files,simulation,[...project.entries,...(project.custom||[])],current+'::'+selection);if(target){current=target.file;selection=target.node.id;}}
  const visualKey=JSON.stringify([current,JSON.parse(selection||'[]')[0],runtimeForm?.id,runtimeForm?null:[runtimeHud?.title,runtimeHud?.subtitle,runtimeHud?.actionbar]]);if(visualKey!==runtimeVisualKey){runtimeVisualKey=visualKey;runtimeSceneTick=runtimeTick;}simulation.runtimeSceneTick=runtimeSceneTick;
  syncSimulation();render();
  const custom=runtimeForm?.kind==='action'&&route&&route.kind!=='fallback'&&route.sample!==undefined&&$('canvas').querySelectorAll('.control').length>1;
  renderRuntimeForm($('scriptFormView'),runtimeForm&&!custom?runtimeForm:null,response=>scriptRuntime.respond(response));
- if(runtimeForm)$('screenName').textContent=runtimeForm.title+' · 脚本运行';
+ if(runtimeForm)$('screenName').textContent=stripFormatting(runtimeForm.title)+' · 脚本运行';
 }
 
 const comparison=new Comparison($('comparison'));
@@ -117,7 +125,7 @@ if(project.custom?.length){
 }if(project.templates.length){const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='引用模板（'+project.templates.length+'，非独立界面）';details.append(summary);for(const template of project.templates){const el=button(template.namespace+' · '+template.node.name,()=>{activeForm=null;current=template.file;selection=template.node.id;render()},'tree-item');el.title=template.file;details.append(el)}$('tree').append(details)}appendPhysicalFiles($('tree'),files,project,projectGroups,{current,showOriginal:$('showOriginal').checked,open:(file,id)=>{hideHome();activeForm=null;current=file;selection=id;render();}});}else {const holder=document.createElement('div');holder.id='interfaceContents';$('tree').append(holder);interfaceTree(holder,model,{file:current,selected,ns,openScreen,openRoute,selectControl:selectNode});}
 if(project.forms.length){const heading=document.createElement('div');heading.className='heading';heading.textContent='脚本表单（静态识别）';$('tree').append(heading);for(const form of project.forms){$('tree').append(button('◇ '+(form.displayTitle||stripFormatting(form.title)),()=>showForm(form),'tree-item'));}}
 
-$('screenName').textContent=current||'界面预览';showSource();const scene=draw(ns,instances.warnings);renderSearch();const issues=sceneIssues({parsed,resolved,ns,runtime:scene.runtime,files,file:current,rootName:selected?.path[0],layoutIssues:scene.issues});$('count').textContent=`(${issues.length} 类 / ${issues.reduce((sum,i)=>sum+i.count,0)} 项)`;renderIssues($('issues'),issues,issue=>{if(issue.path)selection=JSON.stringify(issue.path);render()});updateNavigation(project,ns,selected);if(selected)properties(selected);else $('properties').textContent=parsed.error?'当前文件解析失败：'+parsed.error:files.has(current)?'当前文件没有可选控件，可在源码中检查定义。':'导入资源包，或打开示例开始编辑。';renderHome();renderStudio();renderStageFour();}
+$('screenName').textContent=current||'界面预览';showSource();const scene=draw(ns,instances.warnings);renderSearch();const issues=sceneIssues({parsed,resolved,ns,runtime:scene.runtime,files,file:current,rootName:selected?.path[0],layoutIssues:scene.issues});$('count').textContent=`(${issues.length} 类 / ${issues.reduce((sum,i)=>sum+i.count,0)} 项)`;lastIssues=issues;renderIssues($('issues'),issues,issue=>{shell.setMode('edit');if(issue.path)selection=JSON.stringify(issue.path);render()});updateNavigation(project,ns,selected);if(selected)properties(selected);else $('properties').textContent=parsed.error?'当前文件解析失败：'+parsed.error:files.has(current)?'当前文件没有可选控件，可在源码中检查定义。':'导入资源包，或打开示例开始编辑。';renderHome();renderStudio();renderStageFour();renderViewNavigation();}
 function showSource(){
   const draft=sourceDrafts.read(current,files.has(current)?text(files.get(current)):'');
   $('source').value=draft.text;
@@ -241,7 +249,7 @@ if(importedSettings!==null)new EditSession().loadSettings(importedSettings);
 const presetEntries=[...incoming].filter(([path])=>isEditorFile(path)&&path.endsWith('/presets.json'));if(presetEntries.length>1)throw Error('包中包含多份预设文件');
 const importedPresets=presetEntries.length?text(presetEntries[0][1]):null;if(importedPresets!==null)new Presets().load(importedPresets);
 for(const [path]of incoming)if(isEditorFile(path))incoming.delete(path);
-const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');scriptRuntime.stop();record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){stateSamples.clear();previewSceneKey='';presets.clear();homeVisible=true;homeModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;scriptRuntime.setFiles(files,{reset:!appendImport});render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
+const merged=mergeImport(next,incoming),changedPaths=[...merged.files].filter(([path,content])=>next.get(path)!==content).map(([path])=>path);next.clear();for(const [p,b]of merged.files)next.set(p,b);const candidates=[...next.keys()].filter(p=>!isVanilla(p)&&/\.json$/i.test(p)&&(/(^|\/)ui\//.test(p)||parse(text(next.get(p))).data?.namespace));if(!candidates.length)throw Error('未找到 UI JSON，请导入包含 ui 文件夹的资源包，或独立 UI JSON。');scriptRuntime.stop();record();editSession.acceptImport(next,{replace:!appendImport,changedPaths});if(importedSettings!==null)editSession.loadSettings(importedSettings);if(!appendImport){stateSamples.clear();previewSceneKey='';presets.clear();homeVisible=shell.mode==='edit';homeModel=null;sidebarModel=null;sourceDrafts.clear();sourceApplications.clear();routePresets.clear();navigationOrigin=null;}if(importedPresets!==null)presets.load(importedPresets,{merge:appendImport});activeForm=null;const swept=sweepOfficial(next);files=swept.files;if(!appendImport||!files.has(current)){current=candidates.find(p=>!p.endsWith('_ui_defs.json'))||candidates[0];selection='';const entry=screens(files).entries.find(e=>e.file===current)||screens(files).entries[0]||screens(files).custom?.[0];if(entry){current=entry.file;selection=entry.node.id;}}$('project').textContent=list[0].name;scriptRuntime.setFiles(files,{reset:!appendImport});render();$('vanillaStatus').textContent='已重新清扫：移除 '+swept.removed.length+' 个重复原版文件';toast('导入完成，共 '+files.size+' 个文件；已清扫 '+swept.removed.length+' 个重复原版文件'+(merged.relocated.length?' · 定位 '+merged.relocated.length+' 个补充文件':'')+(merged.ambiguous.length?' · '+merged.ambiguous.length+' 个贴图路径不明确，保留原路径':''));syncOfficial()}catch(e){toast('导入失败：'+e.message)}}
 $('import').onclick=()=>{appendImport=false;$('files').click()};$('dependency').onclick=()=>{appendImport=true;$('files').click()};$('files').onchange=e=>load([...e.target.files]);document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();load([...e.dataTransfer.files])});$('search').oninput=renderSearch;$('resolution').onchange=refreshScene;$('guiScale').onchange=refreshScene;$('zoom').onchange=refreshScene;$('undo').onclick=()=>{if(history.length){future.push(snapshot());restore(history.pop())}};$('redo').onclick=()=>{if(future.length){history.push(snapshot());restore(future.pop())}};$('apply').onclick=()=>{if(!current||fileProtection().locked)return;hideHome();const s=sourceInput($('source').value,text(files.get(current)));record();sourceDrafts.remove(current);files.set(current,bytes(s));sourceApplications.set(current,s);render();toast(data().error?'源码解析失败：'+data().error:'已应用源码。')};
 function download(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 let reviewedFiles=null;
@@ -300,7 +308,7 @@ $('settingsFile').onchange=async event=>{
 function model(){return navigationModel(files,screens(files,$('showOriginal').checked));}
 function syncSimulation(){ $('simulation').value=JSON.stringify(simulation,null,2); }
 function routePreset(route){const saved=routePresets.get(route.id);return saved&&routeMatches(route,route.kind==='container'?saved.containerTitle:saved.formTitle)?saved:undefined;}
-function rememberSimulation(){homeModel=null;const navigation=model(),route=navigation.routes.find(r=>r.kind==='container'&&r.screen.file===current&&r.sample===simulation.containerTitle)||routeForTitle(navigation,simulation.formTitle);if(route)routePresets.set(route.id,structuredClone(simulation));}
+function rememberSimulation(){homeModel=null;sidebarModel=null;const navigation=model(),route=navigation.routes.find(r=>r.kind==='container'&&r.screen.file===current&&r.sample===simulation.containerTitle)||routeForTitle(navigation,simulation.formTitle);if(route)routePresets.set(route.id,structuredClone(simulation));}
 function openScreen(screen){
   homeVisible=false;activeForm=null;navigationOrigin=null;current=screen.file;selection=screen.node.id;
   const title=titleForScene(screen,simulation);if(title!==undefined)simulation={...simulation,formTitle:title};
@@ -363,6 +371,15 @@ function renderHome(){
   interfaceCards(home,navigation,files,{simulation,presetFor:routeSimulation,openScreen,openRoute});
 }
 
+function renderViewNavigation(){
+ if(shell.mode!=='view'){sidebarModel=null;return;}
+ const navigation=model();if(sidebarModel!==navigation){sidebarModel=navigation;interfaceCards(shell.viewScreens,navigation,files,{simulation,presetFor:routeSimulation,openScreen,openRoute,compact:true,lazy:true});}
+ const selected=sceneNodes.find(node=>node.id===selection),route=navigation.routes.find(item=>item.kind==='container'&&item.screen.file===current&&item.node.path[0]===selected?.path[0]&&item.sample===(simulation.containerTitle??'普通箱子'))||routeForSelection(navigation,current,selected)||routeForTitle(navigation,simulation.formTitle),root=selected?.path[0];
+ const screen=[...navigation.groups.values()].flat().find(screen=>screen.file===current&&screen.node.path[0]===root);
+ shell.highlight(screen?.id,route?.screen.file===current?route.id:null);
+ if(!homeVisible&&!runtimeForm&&screen)$('screenName').textContent=route?.screen.file===current?route.label:(screen.namespace?screen.namespace+' · ':'')+screen.node.name.split('@')[0];
+}
+
 function presetScene(value=simulation,inferFromData=false){
  const navigation=model(),node=sceneNodes.find(n=>n.id===selection),root=node?.path[0]??JSON.parse(selection||'[]')[0];
  const container=navigation.routes.find(r=>r.kind==='container'&&r.screen.file===current&&r.node.path[0]===root&&r.sample===value.containerTitle);
@@ -392,8 +409,9 @@ function renderStudio(){
  const budget=controlBudget(currentInstances?.data||{},root?.path[0],branches,{origins:currentResolved?.origins,file:current});$('controlBudget').className='budget '+budget.severity;$('controlBudget').textContent=`创建预算：本包 ${budget.custom} · 原版 ${budget.vanilla} · 合计 ${budget.total}（含隐藏分支；本包 >1000 黄、>3000 红）`;
  if(currentResolved?.issues.some(issue=>issue.message.includes('未找到'))) $('controlBudget').textContent+=' · 有继承未解析，数量为下限';
  $('budgetBranches').replaceChildren();for(const branch of budget.branches){const row=document.createElement('small');row.textContent=branch.label+'：本包 '+branch.custom+' · 原版 '+branch.vanilla+' · 合计 '+branch.total;$('budgetBranches').append(row);}
+ shell.refresh({issues:lastIssues,budget,previewLabel:scriptRuntime.running?'临时模拟玩家':presets.entries.find(entry=>JSON.stringify(entry.data)===JSON.stringify(simulation))?.name||($('sampleMode')?.dataset.active==='true'?'包内状态示例':Object.keys(simulation).length?'临时预览数据':'默认模拟')});
  const refreshMatrix=()=>{
-  if(!$('matrixDetails').open)return;
+  if(shell.mode!=='edit'||shell.right!=='matrix'||!$('matrixDetails').open)return;
   renderMatrix($('textureMatrix'),analysisObject,files,current);
   const chooser=$('stateButton'),old=chooser.value;chooser.replaceChildren();
   const buttons=sceneNodes.filter(n=>runtimeNodes.get(n.id)?.type==='button'&&sceneInfo?.scene.rects.has(n.id));
@@ -417,7 +435,7 @@ $('loadSavedPreset').onclick=()=>{
 $('deleteSavedPreset').onclick=()=>{record();presets.remove($('savedPresets').value);renderStudio();};
 $('exportPresets').onclick=()=>download(new Blob([presets.text()],{type:'application/json'}),'easysee-presets.json');
 $('exportWorkspace').onclick=async()=>{try{if(!globalThis.JSZip)throw Error('压缩包组件未加载');const zip=new JSZip();for(const [path,bytes]of files)if(!isVanilla(path)&&!isEditorFile(path))zip.file(path,bytes);zip.file('.easysee/project.json',editSession.settings());zip.file('.easysee/presets.json',presets.text());download(await zip.generateAsync({type:'blob'}),'easy-see-project.zip');}catch(error){toast(error.message);}};
-$('demo').onclick=()=>{scriptRuntime.stop();activeForm=null;record();presets.clear();sourceDrafts.clear();files=new Map([['Example_RP/ui/demo.json',bytes(JSON.stringify({namespace:'easy_see',main:{type:'panel',size:[440,260],controls:[{title:{type:'label',text:'你的界面，从这里开始',size:[320,36],offset:[0,-70],font_size:22,color:[.65,.92,.77]}},{subtitle:{type:'label',text:'选择左侧控件，在右侧修改参数',size:[320,24],offset:[0,-20],color:[.65,.7,.8]}},{start:{type:'button',text:'开始冒险',size:[180,40],offset:[0,55]}}]}} ,null,2))]]);editSession.acceptImport(files,{replace:true});current='Example_RP/ui/demo.json';selection='';$('project').textContent='示例项目';scriptRuntime.setFiles(files,{reset:true});render()};$('demo').click();
+$('demo').onclick=()=>{scriptRuntime.stop();activeForm=null;record();presets.clear();sourceDrafts.clear();files=new Map([['Example_RP/ui/demo.json',bytes(JSON.stringify({namespace:'easy_see',main:{type:'panel',size:[440,260],controls:[{title:{type:'label',text:'你的界面，从这里开始',size:[320,36],offset:[0,-70],font_size:22,color:[.65,.92,.77]}},{subtitle:{type:'label',text:'切换到「改」，选择控件调整参数',size:[320,24],offset:[0,-20],color:[.65,.7,.8]}},{start:{type:'button',text:'开始冒险',size:[180,40],offset:[0,55]}}]}} ,null,2))]]);editSession.acceptImport(files,{replace:true});current='Example_RP/ui/demo.json';selection='';sidebarModel=null;$('project').textContent='示例项目';scriptRuntime.setFiles(files,{reset:true});render()};$('demo').click();
 
 function showForm(form,preserve=false){homeVisible=false;const navigation=navigationModel(files,screens(files)),route=routeForTitle(navigation,titleSample(form)),saved=route&&routePreset(route);if(!preserve&&saved)simulation=structuredClone(saved);activeForm=form;const project=screens(files),matches=project.entries.filter(s=>s.links.some(f=>f.id===form.id));const target=sceneForForm(project.entries,form);if(!preserve&&!saved){const titleField=form.fields.find(f=>f.kind==='title'),prefix=titleField?.parts?.slice(0,titleField.parts.indexOf(null)).join('');const keep=form.titlePattern&&prefix&&simulation.formTitle?.startsWith(prefix);simulation={...simulation,formTitle:keep?simulation.formTitle:titleSample(form),formBody:keep?simulation.formBody||'':fieldSample(form.fields.find(f=>f.kind==='body')),formButtons:keep?formButtons(simulation,form):formButtons({},form)}};syncSimulation();if(target){current=target.file;selection=route?.screen.id===target.id?route.node.id:target.node.id;expanded.add(target.id);render();$('screenName').textContent=(form.displayTitle||stripFormatting(form.title))+' · 自定义表单';if($('canvas').querySelectorAll('.control').length>1)return;toast('该布局缺少可渲染的模板，暂显示标准表单。');}render();$('canvas').replaceChildren();$('screenName').textContent=form.title+' · '+(matches.length>1?'多个布局候选，暂用标准表单':'标准表单模拟');const box=document.createElement('div');box.className='form-simulation';const title=document.createElement('h2');paintText(title,simulation.formTitle??form.title);box.append(title);const previewFields=[{kind:'body',text:simulation.formBody||''},...formButtons(simulation,form).map(v=>({...v,kind:'button'}))];for(const field of previewFields){if(field.kind==='title')continue;const el=field.kind==='button'?button('',()=>{if(mode==='preview'){ $('clickResult').textContent='点击：button.form_button_click · 序号：'+field.index;followButton(form,field.index)}else inspectScript(form,field)}):document.createElement('p');if(field.texture){const path=texturePath(files,form.file,field.texture);if(path){const img=document.createElement('img'),url=URL.createObjectURL(new Blob([files.get(path)],{type:'image/png'}));urls.push(url);img.src=url;img.alt='';el.append(img)}}const label=document.createElement('span');paintText(label,field.dynamic?'[动态内容]':field.text);el.append(label);box.append(el)}$('canvas').append(box);const buttons=box.querySelectorAll('button').length;$('collectionStats').textContent=`按钮数据 ${formButtons(simulation,form).length} 项 · 标准表单按钮 ${buttons} 个`;$('controlStats').textContent='标准表单模拟（未使用 JSON UI 集合布局）';inspectScript(form);}
 function inspectScript(form,field){$('properties').replaceChildren();const h=document.createElement('h3');h.textContent=stripFormatting(field?field.text:form.title);const note=document.createElement('small');note.textContent='脚本：'+form.file+':'+form.line+'。'+(form.items.length?'候选触发物品：'+form.items.join('、'):'未识别到确定的物品触发入口。')+' 标准脚本表单字段暂只读；动态逻辑不执行。';$('properties').append(h,note);}
@@ -508,6 +526,7 @@ $('clearCache').onclick=async()=>{await officialCache.clear();await refreshCache
 refreshCacheStatus();
 
 function openSimulationFields(fill=false){
+ shell.openInspector('data',{manual:!fill});
  $('simulationDetails').open=true;
  if(fill)$('channelDetails').open=true;
  const target=(fill?$('channelDetails'):$('simulationDetails')).querySelector('summary');
@@ -523,7 +542,7 @@ function renderPreviewStatus(root,schemas=[]){
  status.dataset.kind=readiness.kind;
  if(stateSamples.exampleHidden&&readiness.kind!=='parse-error'){readiness.message='当前为隐藏状态示例，选择其他包内状态即可恢复预览。';readiness.canFill=false;}
  const message=document.createElement('span');message.textContent=readiness.message;status.append(message);
- if(readiness.kind==='parse-error')status.append(button('查看源码',()=>{$('sourceDetails').open=true;$('sourceDetails').scrollIntoView({block:'nearest'});}));
+ if(readiness.kind==='parse-error')status.append(button('查看源码',()=>{shell.openInspector('source');$('sourceDetails').open=true;$('sourceDetails').scrollIntoView({block:'nearest'});}));
  else{
   status.append(button(readiness.canFill?'打开通道填表':'打开模拟数据',()=>openSimulationFields(readiness.canFill)));
   if(stateSamples.groups.length)status.append(button('一键预览包内示例',()=>stateSamples.first()));

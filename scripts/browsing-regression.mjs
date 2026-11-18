@@ -31,7 +31,7 @@ const bounded=async promise=>{let timer;try{return await Promise.race([promise,n
 const search=async term=>bounded(evaluate(`(()=>{const start=performance.now();document.getElementById('search').value=${JSON.stringify(term)};document.getElementById('search').dispatchEvent(new Event('input'));return {term:${JSON.stringify(term)},ms:performance.now()-start,results:document.querySelectorAll('#searchResults .search-result').length,vanilla:[...document.querySelectorAll('#searchResults .search-result')].filter(el=>el.textContent.includes('__vanilla__/')).length};})()`));
 try{
  await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1700,height:1200,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");
+ await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline browsing regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
  await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");

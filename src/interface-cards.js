@@ -22,7 +22,8 @@ export function cardAnalysis(files,screen,simulation,route){
 
 // A local layout overview, not a second editor renderer. Selection always opens
 // the full fidelity canvas. No imported scripts or remote image URLs are run.
-async function thumbnail(canvas,files,screen,simulation,route){
+async function thumbnail(canvas,files,screen,simulation,route,isActive=()=>true){
+  if(!isActive())return;
   const {scene,presentation,issues}=cardAnalysis(files,screen,simulation,route);
   const context=canvas.getContext('2d');context.fillStyle='#252c38';context.fillRect(0,0,320,180);context.scale(.5,.5);
   const visual=[...presentation].filter(([id,item])=>item.visible&&item.opacity>0&&item.rect.w>0&&item.rect.h>0&&['image','label','button'].includes(scene.runtime.get(id)?.type)).map(([,item])=>item.rect);
@@ -34,7 +35,7 @@ async function thumbnail(canvas,files,screen,simulation,route){
   const imageCache=new Map(),pathCache=new Map();
   const imageFor=path=>{if(!imageCache.has(path))imageCache.set(path,(async()=>{const url=URL.createObjectURL(new Blob([files.get(path)]));try{const image=new Image();image.src=url;await image.decode();return image;}finally{URL.revokeObjectURL(url);}})());return imageCache.get(path);};
   for(const [id,item]of [...presentation].sort(([,a],[,b])=>a.layer-b.layer)){
-    if(!canvas.isConnected)return;
+    if(!canvas.isConnected||!isActive())return;
     if(!item.visible)continue;
     const obj=scene.runtime.get(id),r=item.rect;context.save();context.globalAlpha=item.opacity;
     if(item.clip){context.beginPath();context.rect(item.clip.x,item.clip.y,item.clip.w,item.clip.h);context.clip();}
@@ -52,9 +53,9 @@ async function thumbnail(canvas,files,screen,simulation,route){
   return {total:scene.total,issues:issues.length,visible:[...presentation.values()].filter(p=>p.visible).length};
 }
 
-const generations=new WeakMap();
-export function interfaceCards(container,model,files,{simulation,presetFor,openScreen,openRoute}){
-  const generation={};generations.set(container,generation);
+const generations=new WeakMap(),observers=new WeakMap();
+export function interfaceCards(container,model,files,{simulation,presetFor,openScreen,openRoute,compact=false,lazy=false}){
+  observers.get(container)?.disconnect();const generation={};generations.set(container,generation);const active=()=>container.isConnected&&!container.hidden&&generations.get(container)===generation;
   container.replaceChildren();const jobs=[];
   for(const [category,screens]of model.groups){
     const heading=document.createElement('h3');heading.textContent=category;container.append(heading);
@@ -64,7 +65,7 @@ export function interfaceCards(container,model,files,{simulation,presetFor,openS
       if(model.routes.some(route=>route.definition?.id===screen.id))continue;
       const routes=model.routes.filter(route=>route.screen.id===screen.id),entries=routes.length?routes.map(route=>({route,label:route.label})):[{label:screenLabel(screen)}];
       for(const entry of entries){
-        const card=document.createElement('button');card.className='screen-card';card.title=screen.file;card.dataset.screen=screen.id;
+        const card=document.createElement('button');card.className=compact?'side-screen':'screen-card';card.title=screen.file;card.dataset.screen=screen.id;
         if(entry.route)card.dataset.route=entry.route.id;
         const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;canvas.setAttribute('aria-label','布局缩略图');
         const name=document.createElement('strong');name.textContent=entry.label;
@@ -76,10 +77,16 @@ export function interfaceCards(container,model,files,{simulation,presetFor,openS
           const key=trigger.fields.some(f=>/subtitle/.test(f))?'subtitle':trigger.fields.some(f=>/actionbar/.test(f))?'actionbar':trigger.fields.some(f=>/hud_title/.test(f))?'title':null;
           if(key&&!sample[key])sample={...sample,[key]:trigger.name+'示例'};
         }
-        jobs.push(async()=>{try{const result=await thumbnail(canvas,files,screen,sample,entry.route);if(result){card.dataset.count=result.total;stats.textContent=`定义 ${result.total} · 问题 ${result.issues} 类`+(result.visible?'':' · 模拟数据未触发显示');}}catch{stats.textContent='布局暂不可预览，点击查看定义与诊断';}});
+        jobs.push({card,run:async()=>{try{const result=await thumbnail(canvas,files,screen,sample,entry.route,active);if(result){card.dataset.count=result.total;stats.textContent=`定义 ${result.total} · 问题 ${result.issues} 类`+(result.visible?'':' · 模拟数据未触发显示');}}catch{stats.textContent='布局暂不可预览，点击查看定义与诊断';}}});
       }
     }
   }
-  // Yield between cards, and stop when the overview was replaced by navigation.
-  (async()=>{for(const job of jobs){if(!container.isConnected||container.hidden||generations.get(container)!==generation)return;await job();await new Promise(resolve=>requestAnimationFrame(resolve));}})();
+  // Side navigation only paints cards near the scroll viewport. Editing and
+  // fast script ticks must not parse every dormant screen to draw the sidebar.
+  let running=false;const queue=[];
+  const drain=async()=>{if(running)return;running=true;try{while(queue.length&&active()){await queue.shift().run();await new Promise(resolve=>requestAnimationFrame(resolve));}}finally{running=false;}};
+  if(lazy&&globalThis.IntersectionObserver){
+    const byCard=new Map(jobs.map(job=>[job.card,job])),observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const job=byCard.get(entry.target);if(job){byCard.delete(entry.target);observer.unobserve(entry.target);queue.push(job);}}drain();},{root:container.closest('aside'),rootMargin:'160px'});
+    observers.set(container,observer);jobs.forEach(job=>observer.observe(job.card));
+  }else{queue.push(...jobs);drain();}
 }
