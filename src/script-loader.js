@@ -1,6 +1,7 @@
+import {stateObservationPlugin} from './state-observer.js';
 // Babel handles lexical scope, live import references, re-exports and circular CommonJS modules.
 // A package never receives a network resolver or the host's require().
-export function createScriptLoader({Babel,runtime,sources,onProgress=()=>{}}){
+export function createScriptLoader({Babel,runtime,sources,onProgress=()=>{},compiledCache=new Map()}){
  const cache=new Map(),loaded=[];
  function resolve(from,specifier){
   if(specifier==='@minecraft/server'||specifier==='@minecraft/server-ui')return specifier;
@@ -17,7 +18,7 @@ export function createScriptLoader({Babel,runtime,sources,onProgress=()=>{}}){
   if(!Object.hasOwn(sources,file))throw Error('脚本入口不存在：'+file);
   const module={exports:{}};cache.set(file,module);loaded.push(file);onProgress(file);
   try{
-   const result=Babel.transform(sources[file],{filename:file,sourceType:'module',babelrc:false,configFile:false,retainLines:true,plugins:['transform-dynamic-import',['transform-modules-commonjs',{importInterop:'none'}]]});
+   let result=compiledCache.get(file);if(!result){result=Babel.transform(sources[file],{filename:file,sourceType:'module',babelrc:false,configFile:false,retainLines:true,plugins:[[stateObservationPlugin,{file}],'transform-dynamic-import',['transform-modules-commonjs',{importInterop:'none'}]]});compiledCache.set(file,result);}
    const code=result.code+'\n//# sourceURL=easysee-pack:///'+encodeURI(file).replace(/[\r\n]/g,'');
    new Function('require','module','exports',code)(specifier=>load(resolve(file,specifier)),module,module.exports);
   }catch(thrown){const error=thrown instanceof Error?thrown:new Error(String(thrown));error.file||=file;module.error=error;throw error;}

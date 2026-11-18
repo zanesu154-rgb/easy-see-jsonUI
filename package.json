@@ -17,6 +17,7 @@
     "test:missing-data": "node scripts/missing-data-regression.mjs",
     "test:states": "node scripts/state-samples-regression.mjs",
     "test:scripts": "node scripts/script-runtime-regression.mjs",
-    "test:shell": "node scripts/shell-regression.mjs"
+    "test:shell": "node scripts/shell-regression.mjs",
+    "test:player-state": "node scripts/player-state-regression.mjs"
   }
 }

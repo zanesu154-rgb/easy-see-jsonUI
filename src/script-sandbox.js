@@ -4,7 +4,7 @@ const frameSource=`<!doctype html><meta http-equiv="Content-Security-Policy" con
 let worker;addEventListener('message',event=>{if(event.source!==parent)return;const message=event.data;if(message.type==='boot'){worker=new Worker(URL.createObjectURL(new Blob([message.code],{type:'text/javascript'})));worker.onmessage=event=>parent.postMessage(event.data,'*');worker.onerror=event=>parent.postMessage({type:'fatal',message:event.message},'*');}else worker?.postMessage(message);});parent.postMessage({type:'frameReady'},'*');<\/script>`;
 let trustedCode;
 async function workerCode(){
- if(!trustedCode)trustedCode=Promise.all(['../vendor/babel/babel.min.cjs','./script-engine.js','./script-loader.js','./script-worker.js'].map(path=>fetch(new URL(path,import.meta.url)).then(response=>{if(!response.ok)throw Error('无法加载脚本运行组件');return response.text();}))).then(parts=>parts.map((source,i)=>i?source.replace(/^export /gm,''):source).join('\n')+'\nscriptWorkerMain();').catch(error=>{trustedCode=null;throw error;});
+ if(!trustedCode)trustedCode=Promise.all(['../vendor/babel/babel.min.cjs','./player-saves.js','./state-observer.js','./script-engine.js','./script-loader.js','./player-session.js','./script-worker.js'].map(path=>fetch(new URL(path,import.meta.url)).then(response=>{if(!response.ok)throw Error('无法加载脚本运行组件');return response.text();}))).then(parts=>parts.map((source,i)=>i?source.replace(/^import .*;\s*$/gm,'').replace(/^export /gm,''):source).join('\n')+'\nscriptWorkerMain();').catch(error=>{trustedCode=null;throw error;});
  return trustedCode;
 }
 export class ScriptSandbox{
@@ -14,10 +14,10 @@ export class ScriptSandbox{
   const message=event.data;if(!message||typeof message!=='object')return;
   if(message.type==='frameReady')this.frame.contentWindow.postMessage({type:'boot',code},'*');
   else if(message.type==='ready')this.request({type:'start',entry,sources:project.sources,seed});
-  else{this.onMessage(message);if(['snapshot','failed'].includes(message.type)){clearTimeout(this.startTimer);const timer=this.requests.get(message.request);clearTimeout(timer);this.requests.delete(message.request);}if(message.type==='progress')this.arm(message);}
+  else{this.onMessage(message);if(['snapshot','failed','preview'].includes(message.type)){clearTimeout(this.startTimer);const timer=this.requests.get(message.request);clearTimeout(timer);this.requests.delete(message.request);}if(message.type==='progress')this.arm(message);}
  };window.addEventListener('message',this.listener);this.frame.srcdoc=frameSource;document.body.append(this.frame);this.startTimer=setTimeout(()=>this.timeout(),30000);}
  arm(message){clearTimeout(this.startTimer);this.startTimer=setTimeout(()=>this.timeout(),15000);}
  timeout(){this.stop();this.onMessage({type:'fatal',message:'脚本长时间未响应，已停止。可重启运行；此前导入的文件仍保留。'});}
- request(message){if(!this.frame)return;clearTimeout(this.startTimer);const request=++this.sequence;this.requests.set(request,setTimeout(()=>this.timeout(),15000));this.frame.contentWindow.postMessage({...message,request},'*');}
+ request(message){if(!this.frame)return;clearTimeout(this.startTimer);const request=++this.sequence;this.requests.set(request,setTimeout(()=>this.timeout(),message.type==='preview'?60000:15000));this.frame.contentWindow.postMessage({...message,request},'*');}
  stop(){this.generation++;clearTimeout(this.startTimer);for(const timer of this.requests.values())clearTimeout(timer);this.requests.clear();if(this.listener)window.removeEventListener('message',this.listener);this.frame?.remove();this.frame=null;}
 }

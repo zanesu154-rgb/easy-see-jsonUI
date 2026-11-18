@@ -54,7 +54,7 @@ async function thumbnail(canvas,files,screen,simulation,route,isActive=()=>true)
 }
 
 const generations=new WeakMap(),observers=new WeakMap();
-export function interfaceCards(container,model,files,{simulation,presetFor,openScreen,openRoute,compact=false,lazy=false}){
+export function interfaceCards(container,model,files,{simulation,presetFor,openScreen,openRoute,compact=false,lazy=false,cardData}){
   observers.get(container)?.disconnect();const generation={};generations.set(container,generation);const active=()=>container.isConnected&&!container.hidden&&generations.get(container)===generation;
   container.replaceChildren();const jobs=[];
   for(const [category,screens]of model.groups){
@@ -77,6 +77,7 @@ export function interfaceCards(container,model,files,{simulation,presetFor,openS
           const key=trigger.fields.some(f=>/subtitle/.test(f))?'subtitle':trigger.fields.some(f=>/actionbar/.test(f))?'actionbar':trigger.fields.some(f=>/hud_title/.test(f))?'title':null;
           if(key&&!sample[key])sample={...sample,[key]:trigger.name+'示例'};
         }
+        const playerData=cardData?.(screen,entry.route,sample);if(playerData){card.dataset.playerState=playerData.status;const caption=document.createElement('span');caption.className='thumbnail-state';caption.textContent=playerData.caption||'当前玩家存档';card.append(caption);if(playerData.status!=='ready'){stats.textContent=caption.textContent;continue;}sample=playerData.simulation||sample;}
         jobs.push({card,run:async()=>{try{const result=await thumbnail(canvas,files,screen,sample,entry.route,active);if(result){card.dataset.count=result.total;stats.textContent=`定义 ${result.total} · 问题 ${result.issues} 类`+(result.visible?'':' · 模拟数据未触发显示');}}catch{stats.textContent='布局暂不可预览，点击查看定义与诊断';}}});
       }
     }

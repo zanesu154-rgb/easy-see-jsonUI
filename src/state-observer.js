@@ -1,0 +1,28 @@
+// Instrument observations, never replace primitives with wrappers. Each
+// inferred option must be linked to one actual storage read through a binding.
+export function stateObservationPlugin({types:t}){
+ const token=(path,file)=>{if(!path?.node)return '';return file+':'+(path.node.start??path.node.loc?.start.line??'');};
+ return {visitor:{Program:{enter(path,state){state.probe=path.scope.generateUidIdentifier('easyseeState');state.file=state.opts.file||state.filename?.replace(/^\/+/, '')||'script';path.unshiftContainer('body',t.importDeclaration([t.importSpecifier(t.cloneNode(state.probe),t.identifier('__easyseeProbe'))],t.stringLiteral('@minecraft/server')));}},
+ VariableDeclarator:{exit(path,state){const node=path.node;if(node.start==null||node.__observed||!node.init||!t.isIdentifier(node.id)||t.isLiteral(node.init)||t.isFunction(node.init)||t.isClass(node.init))return;
+  let asynchronous=t.isAwaitExpression(node.init)||t.isYieldExpression(node.init);path.get('init').traverse?.({AwaitExpression(){asynchronous=true;},YieldExpression(){asynchronous=true;},Function(p){p.skip();}});if(asynchronous)return;
+  node.__observed=true;const key=token(path,state.file),alias=t.isIdentifier(node.init)?token(path.scope.getBinding(node.init.name)?.path,state.file):'';
+  const call=(name,args)=>t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier(name)),args);node.init=t.sequenceExpression([call('begin',[t.stringLiteral(key)]),call('end',[t.stringLiteral(key),node.init,t.stringLiteral(alias)])]);
+ }},
+ CallExpression:{exit(path,state){const node=path.node;if(node.start==null||node.__observed||!t.isMemberExpression(node.callee)||node.callee.computed||!t.isIdentifier(node.callee.property)||!['getDynamicProperty','setDynamicProperty','hasTag','addTag','removeTag','getItem','setItem','getScore','setScore'].includes(node.callee.property.name)||node.arguments.some(arg=>t.isSpreadElement(arg))||t.isSuper(node.callee.object))return;
+  const fallback=path.parentPath.isLogicalExpression()&&path.parent.left===node&&t.isLiteral(path.parent.right)?path.parent.right.value:undefined,meta={file:state.file,line:node.loc?.start.line||1,...(fallback!==undefined?{fallback}:{})};node.__observed=true;
+  const observe=t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('observe')),[node.callee.object,t.stringLiteral(node.callee.property.name),t.valueToNode(meta)]);
+  path.replaceWith(t.callExpression(observe,node.arguments));path.skip();
+ }},
+ MemberExpression:{exit(path,state){const node=path.node;if(node.start==null||node.__observed||!node.computed||t.isSuper(node.object))return;
+  if(path.parentPath.isAssignmentExpression()&&path.parent.left===node||path.parentPath.isUpdateExpression()||path.parentPath.isUnaryExpression({operator:'delete'})||path.parentPath.isForOfStatement()&&path.parent.left===node||path.parentPath.isForInStatement()&&path.parent.left===node||path.parentPath.isCallExpression()&&path.parent.callee===node||path.parentPath.isNewExpression()&&path.parent.callee===node||path.parentPath.isTaggedTemplateExpression())return;
+  let key=t.isIdentifier(node.property)?token(path.scope.getBinding(node.property.name)?.path,state.file):'';node.__observed=true;if(!key&&(t.isCallExpression(node.property)||t.isLogicalExpression(node.property))){key=state.file+':index:'+node.start;node.property=t.sequenceExpression([t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('begin')),[t.stringLiteral(key)]),t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('end')),[t.stringLiteral(key),node.property,t.stringLiteral('')])]);}if(!key)return;
+  path.replaceWith(t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('index')),[node.object,node.property,t.stringLiteral(key),t.valueToNode({file:state.file,line:node.loc?.start.line||1})]));path.skip();
+ }},
+ BinaryExpression:{exit(path,state){const node=path.node;if(node.start==null||node.__observed||!['===','!==','==','!='].includes(node.operator))return;
+  const left=(t.isIdentifier(node.left)||t.isCallExpression(node.left))&&t.isLiteral(node.right),right=(t.isIdentifier(node.right)||t.isCallExpression(node.right))&&t.isLiteral(node.left);if(!left&&!right)return;
+  const id=left?node.left:node.right;let key=t.isIdentifier(id)?token(path.scope.getBinding(id.name)?.path,state.file):'';if(!key&&t.isCallExpression(id)){key=state.file+':comparison:'+node.start;const observed=t.sequenceExpression([t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('begin')),[t.stringLiteral(key)]),t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('end')),[t.stringLiteral(key),id,t.stringLiteral('')])]);if(left)node.left=observed;else node.right=observed;}if(!key)return;node.__observed=true;
+  path.replaceWith(t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('compare')),[node.left,node.right,t.stringLiteral(node.operator),t.stringLiteral(key),t.booleanLiteral(Boolean(left)),t.valueToNode({file:state.file,line:node.loc?.start.line||1})]));path.skip();
+ }},
+ SwitchStatement(path,state){const node=path.node;if(node.__observed||!t.isIdentifier(node.discriminant))return;const key=token(path.scope.getBinding(node.discriminant.name)?.path,state.file);if(!key)return;const values=node.cases.filter(item=>t.isLiteral(item.test)).map(item=>item.test.value);if(values.length<2||values.length>64)return;node.__observed=true;node.discriminant=t.callExpression(t.memberExpression(t.cloneNode(state.probe),t.identifier('options')),[node.discriminant,t.stringLiteral(key),t.valueToNode(values),t.valueToNode({file:state.file,line:node.loc?.start.line||1})]);}
+ }};
+}
