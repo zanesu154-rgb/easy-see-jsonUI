@@ -36,7 +36,7 @@ try{
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline no-data regression')}");
  await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitLong("!document.getElementById('vanilla').disabled");
  await upload('#vanillaFiles',vanillaArchive);await waitLong("document.getElementById('vanillaStatus').textContent.startsWith('原版资源：')");
  await route('MSQB:');
  const empty=await evaluate("({kind:document.getElementById('previewStatus').dataset.kind,message:document.getElementById('previewStatus').textContent,placeholders:document.querySelectorAll('#canvas .control[data-missing-index]').length,glow:[...document.querySelectorAll('#canvas .control')].filter(el=>el.dataset.controlName==='glow').length,issues:document.getElementById('issues').textContent,open:document.getElementById('simulationDetails').open})");

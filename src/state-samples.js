@@ -182,7 +182,7 @@ function channelProfiles(obj,files,library){
  return result;
 }
 export function sampleCatalog(obj,files,file,options={}){
- const library=assets(files,file),groups=buttonProfiles(obj,files,file,library,options);
+ const library=assets(files,file),groups=options.channelOnly?[]:buttonProfiles(obj,files,file,library,options);
  groups.push(...channelProfiles(obj,files,library));
  if(options.containers?.length){groups.push({id:'containers',label:'容器布局',recipes:options.containers.slice(0,20).flatMap(route=>[false,true].map(pocket=>({id:route.id+':'+pocket,label:route.label+' · '+(pocket?'手机':'桌面'),source:route.content,make:sim=>{const next={...structuredClone(sim),containerTitle:route.sample,touch:pocket,pocketEdition:pocket,pocketScreen:pocket};for(const field of ['variables','bindings'])for(const [key,value]of Object.entries({'$container_title':route.sample,'$pocket_screen':pocket,'$pocket_edition':pocket,'$touch':pocket,'$desktop_screen':!pocket}))if(Object.hasOwn(next[field]||{},key))next[field][key]=value;return next;}})))});}
  return groups;

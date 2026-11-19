@@ -9,7 +9,7 @@ export function canvasTabShortcut(event,{dialogOpen=false}={}){
 // Layout changes move existing DOM nodes. They do not reload resources, restart
 // scripts, replace input elements, or apply source/simulation drafts.
 export class EditorShell{
- constructor({onMode,onInspect,onPlayer}){this.mode='view';this.zooms={view:'fit',edit:'fit'};this.scrolls={view:0,edit:0};this.onMode=onMode;this.onInspect=onInspect;this.onPlayer=onPlayer;this.right='properties';this.bottom=null;this.playerOpen=false;this.buildHeader();this.buildFooter();this.buildPanels();this.wire();this.layout();document.body.dataset.shellReady='true';}
+ constructor({onMode,onInspect,onPlayer,onHudExamples}){this.mode='view';this.zooms={view:'fit',edit:'fit'};this.scrolls={view:0,edit:0};this.onMode=onMode;this.onInspect=onInspect;this.onPlayer=onPlayer;this.onHudExamples=onHudExamples;this.right='properties';this.bottom=null;this.playerOpen=false;this.buildHeader();this.buildFooter();this.buildPanels();this.wire();this.layout();document.body.dataset.shellReady='true';}
  buildHeader(){
   const header=document.querySelector('header'),brand=header.querySelector('.brand'),project=$('project'),importButton=$('import'),exportButton=$('export');
   const old=Object.fromEntries([...header.querySelectorAll('button,label.file-button')].map(node=>[node.id||'vanillaZip',node]));
@@ -20,7 +20,14 @@ export class EditorShell{
   this.menu=element('details');this.menu.id='projectMenu';const summary=element('summary','…');summary.setAttribute('aria-label','更多工具');const menuBody=element('div',undefined,'project-menu-body');this.menu.append(summary,menuBody);
   const group=(label,nodes)=>{menuBody.append(element('small',label));for(const node of nodes)if(node)menuBody.append(node);};
   group('工程',[old.dependency,old.demo,old.exportWorkspace,old.importSettings,old.exportSettings]);
-  group('预览与高级',[action('原版资源、字体与缓存…',()=>this.resourceDialog.showModal(),'openResources'),action('高级 › 手写模拟数据',()=>this.openInspector('data',{manual:true}),'openManualSimulation')]);
+  const hudExamples=action('HUD 缩略图示例：开启',()=>{
+   const enabled=hudExamples.getAttribute('aria-pressed')!=='true';
+   hudExamples.setAttribute('aria-pressed',String(enabled));
+   hudExamples.textContent='HUD 缩略图示例：'+(enabled?'开启':'关闭');
+   this.onHudExamples?.(enabled);
+  },'toggleHudExamples');
+  hudExamples.setAttribute('aria-pressed','true');
+  group('预览与高级',[hudExamples,action('原版资源、字体与缓存…',()=>this.resourceDialog.showModal(),'openResources'),action('高级 › 手写模拟数据',()=>this.openInspector('data',{manual:true}),'openManualSimulation')]);
   group('编辑',[old.undo,old.redo]);
   actions.append(this.playerButton,importButton,exportButton,this.menu);header.replaceChildren(info,this.modeButtons,actions);
   const resourceDialog=element('dialog');resourceDialog.id='resourceDialog';resourceDialog.setAttribute('aria-labelledby','resourceTitle');const title=element('h2','原版资源、字体与缓存');title.id='resourceTitle';resourceDialog.append(title,$('vanillaStatus'));

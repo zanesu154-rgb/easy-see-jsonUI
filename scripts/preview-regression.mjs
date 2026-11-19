@@ -36,7 +36,7 @@ try{
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");await send('Page.bringToFront');
  await evaluate("window.fetch=async()=>{throw Error('Offline stage-four regression')}");
  await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitLong("!document.getElementById('vanilla').disabled");
  await select('hud · test_factory');
  const original=await source(),toast='toast.'+'textures/items/kai_trial'.padEnd(150,'$')+'textures/ui/questbook/toast_task'.padEnd(50,'$')+'动画 ABC123';
  await setSim({bindings:{'#text':toast}});
@@ -79,7 +79,7 @@ try{
  // Import a private-use glyph page into the dependency layer; never write it
  // into an existing resource file or ship the user's assets with the editor.
  await evaluate("(async()=>{const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,8,8);const blob=await new Promise(r=>canvas.toBlob(r)),zip=new JSZip();zip.file('Glyph/font/glyph_e1.png',await blob.arrayBuffer());const content=await zip.generateAsync({type:'uint8array'}),dt=new DataTransfer();dt.items.add(new File([content],'font-dependency.zip'));document.getElementById('dependency').click();const input=document.getElementById('files');input.files=dt.files;input.dispatchEvent(new Event('change'));})()");
- await waitLong("document.getElementById('project').textContent==='font-dependency.zip'");await waitLong("!document.getElementById('vanilla').disabled");await select('hud · test_factory');await setSim({bindings:{'#text':toast+'\ue100'}});
+ await waitLong("document.getElementById('project').textContent.endsWith(' +2 依赖')");await waitLong("!document.getElementById('vanilla').disabled");await select('hud · test_factory');await setSim({bindings:{'#text':toast+'\ue100'}});
  await evaluate("document.getElementById('packFont').click()");await waitFor("document.getElementById('fontStatus').textContent.includes('个字形')");assert.ok(await evaluate("[...document.querySelectorAll('#canvas .bitmap-glyph')].some(el=>el.textContent==='\ue100')"));
  assert.equal(await source(),original);
  // IndexedDB round trip across an actual page reload; the second pass has an

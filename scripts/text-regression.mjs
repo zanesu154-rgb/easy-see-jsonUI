@@ -21,7 +21,7 @@ try{
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");await evaluate("document.getElementById('browseView').value='files';document.getElementById('browseView').dispatchEvent(new Event('change'))");
  await evaluate("window.fetch=async()=>{throw Error('Offline text regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");
- if(dependency){await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");}
+ if(dependency){await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitFor("!document.getElementById('vanilla').disabled");}
  const hudGroup=await evaluate("(()=>{const row=[...document.querySelectorAll('#tree button')].find(el=>el.textContent==='hud · ms_status_panel');return row.closest('details').parentElement.closest('details').querySelector('summary').textContent})()");
  assert.match(hudGroup,/hud.*hud_screen/);
  const title='§6奖励 勇气之证 ×12、混沌清露 ×3';

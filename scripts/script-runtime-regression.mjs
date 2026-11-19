@@ -48,13 +48,19 @@ try{
  await click('startScripts');await wait("document.getElementById('scriptStatus').textContent.startsWith('已加载')");await action('发送脚本事件');await evaluate("document.getElementById('scriptEventId').value='fixture:hang'");await click('triggerScriptAction');await wait("document.getElementById('scriptStatus').textContent.includes('长时间未响应')");assert.equal(await evaluate("document.querySelectorAll('iframe[sandbox]').length"),0);assert.deepEqual(await sim(),JSON.parse(draft));
  console.log('PASS independent pack: opt-in, action -> modal -> message -> claim, cancel, virtual ticks, retained input, errors/source, blocked network/storage, restore');
  if(addon&&dependency){
-  await upload('#files',addon);await wait("document.getElementById('project').textContent.includes('武破')");await click('dependency');await upload('#files',dependency);await wait("document.getElementById('project').textContent==='server_form.json'");
+  await upload('#files',addon);await wait("document.getElementById('project').textContent.includes('武破')");await click('dependency');await upload('#files',dependency);await wait("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");
   if(vanilla){await upload('#vanillaFiles',vanilla);await wait("document.getElementById('vanillaStatus').textContent.startsWith('原版资源：')");}
   await click('startScripts');await wait("document.getElementById('scriptStatus').textContent.startsWith('已加载')");assert.match(await evaluate("document.getElementById('scriptStatus').textContent"),/157 个模块/);
   await action('右键 古旧的羊皮卷');for(let i=0;i<3;i++)await native(0);await action('右键 古旧的羊皮卷');await wait("JSON.parse(document.getElementById('simulation').value).formTitle.startsWith('MSQB:')");assert.equal((await sim()).formButtons.length,34);assert.equal(await evaluate("document.getElementById('scriptFormView').hidden"),true);
+  await click('togglePlayer');
+  const realmField=`document.querySelector('[data-field-id="player:martial_realm"]')`;
+  await wait(realmField);
   // Actual canvas buttons, no static jump table and no manually supplied form data.
   await button('m1@ms_questbook.main_tab');await wait("JSON.parse(document.getElementById('simulation').value).formTitle.startsWith('MSQB:realm/')");await button('s4@ms_questbook.sub_tab');await wait("JSON.parse(document.getElementById('simulation').value).formTitle.startsWith('MSQB:realm/kai|')");
-  await click('closeScriptForm');await idle();await action('发送脚本事件');await evaluate("document.getElementById('scriptEventId').value='ms:q_kill';document.getElementById('scriptEventMessage').value='1'");await click('triggerScriptAction');await idle();await click('forwardScriptTicks');await wait("!document.getElementById('forwardScriptTicks').disabled");
+  assert.ok(await evaluate('Boolean('+realmField+')'),'cached Kai page keeps the root action realm field');
+  await click('closeScriptForm');await idle();
+  await wait("!document.getElementById('screenName').textContent.includes('questbook_form') && !document.getElementById('canvas').querySelector('[data-control-name=questbook_form]')");
+  await click('closePlayer');await action('发送脚本事件');await evaluate("document.getElementById('scriptEventId').value='ms:q_kill';document.getElementById('scriptEventMessage').value='1'");await click('triggerScriptAction');await idle();await click('forwardScriptTicks');await wait("!document.getElementById('forwardScriptTicks').disabled");
   await action('右键 古旧的羊皮卷');await button('m2@ms_questbook.main_tab');await wait("JSON.parse(document.getElementById('simulation').value).formTitle.startsWith('MSQB:quest/')");assert.match((await sim()).formButtons[16].text,/^QTR/);await button('n6@ms_questbook.node');await wait("JSON.parse(document.getElementById('simulation').value).formButtons[16].text.startsWith('QTD')");
   await writeFile('/tmp/easysee-5a-questbook.png',Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await click('closeScriptForm');await idle();await action('右键 管理员令牌');await native(0);await native(6);await wait("document.getElementById('scriptFormView').hidden");

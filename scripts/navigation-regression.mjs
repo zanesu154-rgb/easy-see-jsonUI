@@ -37,7 +37,7 @@ try{
  await evaluate("window.fetch=async()=>{throw Error('Offline navigation regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
  assert.equal(await evaluate("!document.getElementById('home').hidden&&document.querySelectorAll('.screen-card').length>0"),true);
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitFor("!document.getElementById('vanilla').disabled");
  const routes=await evaluate("[...document.querySelectorAll('#tree [data-route]')].map(el=>el.textContent)");
  for(const term of ['普通表单','武道天书','北斗星空图','MSQB:'])assert.ok(routes.some(r=>r.includes(term)),routes.join('\n'));
  const home=await send('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/easy-see-interface-overview.png',Buffer.from(home.data,'base64'));

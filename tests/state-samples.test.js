@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {sampleCatalog} from '../src/state-samples.js';
+import {playerCardSimulation} from '../src/player-previews.js';
 import {inferChannels,channelValue} from '../src/simulation-tools.js';
 import {runtimeObject} from '../src/bindings.js';
 import {validateSimulation} from '../src/presets.js';
@@ -17,6 +18,21 @@ test('one-click binary states derive stages and preserve explicit binding preced
  assert.equal(groups[0].recipes.length,11);
  const half=groups[0].recipes[0].make(original);assert.equal(half.subtitle.slice(0,7),'BLOOD:2');assert.equal(half.subtitle.slice(7,55),'1'.repeat(24)+'0'.repeat(24));assert.equal(half.bindings['#hud_subtitle_text_string'],half.subtitle);assert.equal(channelValue(half,'#hud_subtitle_text_string'),half.subtitle);assert.equal(half.title,'保留');assert.equal(original.subtitle,'旧值');assert.equal(half.bindings['#other'],7);
  const full=groups[0].recipes.find(recipe=>recipe.label==='阶段 9 · 100% 填充').make(original);assert.equal(full.subtitle.slice(7,55),'1'.repeat(48));validateSimulation(full);
+});
+test('HUD save thumbnails use labelled examples only when script output is absent and the option is enabled',()=>{
+ const files=new Map([['RP/textures/life/frame_2.png',png()]]);
+ const screen={id:'boss',namespace:'hud',file:'RP/ui/hud.json',node:{name:'boss',obj:boss()}};
+ const state={inventory:[]},base={bindings:{'#hud_subtitle_text_string':'BLOOD:2mock'}};
+ const empty={status:'ready',outputs:[]};
+ const sample=playerCardSimulation(files,screen,null,state,empty,base,{hudExamples:true});
+ assert.equal(sample.status,'example');
+ assert.match(sample.caption,/示例/);
+ assert.equal(sample.simulation.subtitle.slice(7,55),'1'.repeat(24)+'0'.repeat(24));
+ assert.equal(playerCardSimulation(files,screen,null,state,empty,base).status,'unavailable');
+ const output={status:'ready',outputs:[{hud:{subtitle:'BLOOD:2actual'}}]};
+ const actual=playerCardSimulation(files,screen,null,state,output,base,{hudExamples:true});
+ assert.equal(actual.status,'ready');
+ assert.equal(channelValue(actual.simulation,'#hud_subtitle_text_string'),'BLOOD:2actual');
 });
 test('button examples combine decorative consumers before buttons and use package aliases for readable states',()=>{
  const {obj,files}=buttonFixture(),groups=sampleCatalog(obj,files,'RP/ui/a.json',{formTitle:'CUSTOM:示例',titleMatches:title=>title.startsWith('CUSTOM:')}),mixed=groups[0].recipes[0].make({});

@@ -9,7 +9,7 @@ import {nodeContains,screenLabel} from './navigation.js';
 
 export function cardAnalysis(files,screen,simulation,route){
   simulation=route?.kind==='container'?{...simulation,containerTitle:route.sample}:simulation;
-  const resolved=route?.kind==='container'?resolveScene(files,screen.file,simulation,screen.node.name):resolveProject(files,screen.file),instances=instantiateCollections(resolved.data,files,screen.file,simulation,undefined,{rootName:screen.node.name}),all=nodes(instances.data);
+  const resolved=route?.kind==='container'?resolveScene(files,screen.file,simulation,screen.node.name):resolveProject(files,screen.file),instances=instantiateCollections(resolved.data,files,screen.file,simulation,undefined,{rootName:screen.node.name,previewFactory:!route&&Boolean(screen.node.obj.factory)}),all=nodes(instances.data);
   const rootId=route?.node.id||screen.node.id;
   // Layout and counts must use this branch, including hidden descendants, rather
   // than every sibling under long_form. Keep original paths for diagnostics.
@@ -77,7 +77,7 @@ export function interfaceCards(container,model,files,{simulation,presetFor,openS
           const key=trigger.fields.some(f=>/subtitle/.test(f))?'subtitle':trigger.fields.some(f=>/actionbar/.test(f))?'actionbar':trigger.fields.some(f=>/hud_title/.test(f))?'title':null;
           if(key&&!sample[key])sample={...sample,[key]:trigger.name+'示例'};
         }
-        const playerData=cardData?.(screen,entry.route,sample);if(playerData){card.dataset.playerState=playerData.status;const caption=document.createElement('span');caption.className='thumbnail-state';caption.textContent=playerData.caption||'当前玩家存档';card.append(caption);if(playerData.status!=='ready'){stats.textContent=caption.textContent;continue;}sample=playerData.simulation||sample;}
+        const playerData=cardData?.(screen,entry.route,sample);if(playerData){card.dataset.playerState=playerData.status;const caption=document.createElement('span');caption.className='thumbnail-state';caption.textContent=playerData.caption||'当前玩家存档';card.append(caption);if(!playerData.simulation){stats.textContent=caption.textContent;continue;}sample=playerData.simulation||sample;}
         jobs.push({card,run:async()=>{try{const result=await thumbnail(canvas,files,screen,sample,entry.route,active);if(result){card.dataset.count=result.total;stats.textContent=`定义 ${result.total} · 问题 ${result.issues} 类`+(result.visible?'':' · 模拟数据未触发显示');}}catch{stats.textContent='布局暂不可预览，点击查看定义与诊断';}}});
       }
     }

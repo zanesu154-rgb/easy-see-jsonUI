@@ -34,7 +34,7 @@ try{
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline browsing regression')}");
  await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");await waitFor("!document.getElementById('vanilla').disabled");
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");await waitFor("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitFor("!document.getElementById('vanilla').disabled");
  await evaluate("(()=>{const input=document.getElementById('vanillaFiles'),handler=input.onchange;input.onchange=event=>{window.__browsingVanilla=event.target.files[0];handler(event);};})()");
  await upload('#vanillaFiles',vanillaArchive);await waitLong("document.getElementById('vanillaStatus').textContent.startsWith('原版资源：')");
  const status=await evaluate("document.getElementById('vanillaStatus').textContent");

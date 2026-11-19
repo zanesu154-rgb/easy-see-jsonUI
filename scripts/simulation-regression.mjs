@@ -36,7 +36,7 @@ try{
  await send('Page.navigate',{url:'http://127.0.0.1:5173'});await waitFor("document.querySelectorAll('.control').length>0");await evaluate("document.getElementById('editMode').click()");
  await evaluate("window.fetch=async()=>{throw Error('Offline simulation regression')}");
  await upload('#files',addon);await waitLong("document.getElementById('project').textContent.includes('武破')");await waitLong("!document.getElementById('vanilla').disabled");
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent==='server_form.json'");await waitLong("!document.getElementById('vanilla').disabled");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitLong("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");await waitLong("!document.getElementById('vanilla').disabled");
  console.log('Loaded project');
  await select('hud · ms_boss_panel');await setSim({formTitle:'MSQB:old|stale'});
  const fill=await evaluate("document.querySelector('#channelFields input[data-kind=binary]')!==null");assert.equal(fill,true);

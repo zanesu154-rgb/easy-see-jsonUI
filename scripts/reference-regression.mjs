@@ -28,12 +28,12 @@ try {
  const importMs=Date.now()-started;await evaluate("window.__originalAddon=document.getElementById('files').files[0]");
  await evaluate("document.getElementById('dependency').click()");
  await upload('#files',dependency);
- await waitFor("document.getElementById('project').textContent==='server_form.json'");
+ await waitFor("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");
  await evaluate("window.__originalDependency=document.getElementById('files').files[0]");
  await waitFor("!document.getElementById('vanilla').disabled");
  if(looseTextures){
   await evaluate("document.getElementById('dependency').click()");await upload('#files',looseTextures);
-  await waitFor("document.getElementById('project').textContent==='guji.zip'");
+  await waitFor("document.getElementById('project').textContent.endsWith(' +2 依赖')");
   await evaluate("window.__originalTextures=document.getElementById('files').files[0]");
   addedTextures=await evaluate("(async()=>Object.values((await JSZip.loadAsync(window.__originalTextures)).files).filter(e=>!e.dir).length)()");
   await waitFor("!document.getElementById('vanilla').disabled");

@@ -73,7 +73,7 @@ try{
  await evaluate("document.getElementById('undo').click()");assert.equal(await evaluate("document.getElementById('source').value"),source);
  // Real reference case: item 26's tooltip covers item 25's own rectangle.
  await evaluate("document.getElementById('import').click()");await upload('#files',addon);await waitFor("document.getElementById('project').textContent.includes('武破')");
- await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent==='server_form.json'");
+ await evaluate("document.getElementById('dependency').click()");await upload('#files',dependency);await waitFor("document.getElementById('project').textContent.includes('武破')&&document.getElementById('project').textContent.endsWith(' +1 依赖')");
  const sim={formTitle:'MSQB:realm/kai|秘境',formButtons:Array.from({length:34},(_,i)=>({text:i<3?'P0分页':i<10?'S0小页':'QX',texture:''}))};
  for(const [i,name]of [[10,'较早节点'],[11,'较晚节点'],[25,'不灭之焰'],[26,'力可通神']])sim.formButtons[i]={text:'QTA02'+name,texture:'textures/items/kai_trial'};
  await evaluate(`document.getElementById('simulation').value=${JSON.stringify(JSON.stringify(sim))};document.getElementById('simulate').click();[...document.querySelectorAll('#tree button')].find(e=>e.textContent.trim().match(/^[▾▸] long_form$/)).click();document.getElementById('buttonState').value='default';document.getElementById('buttonState').dispatchEvent(new Event('change'))`);
